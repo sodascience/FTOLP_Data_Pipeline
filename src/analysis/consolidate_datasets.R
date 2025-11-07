@@ -1,15 +1,14 @@
 library(haven)
 library(ggplot2)
 library(dplyr)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 
-# Set working directory to processed data
-setwd(DIR_PROCESSED)
-
+# Load files from processed directory
 file_list <- list.files(
-  path = "./",
+  path = DIR_PROCESSED,
   pattern = "\\.sav$",
   full.names = TRUE
 )

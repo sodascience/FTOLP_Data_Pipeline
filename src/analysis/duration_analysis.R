@@ -4,12 +4,12 @@ library(purrr)
 library(dplyr)
 library(labelled)
 library(tools)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 
-# Set working directory to clean data
-setwd(DIR_CLEAN)
+# Note: Using absolute paths from config
 
 # Dataset grouping
 first_stage_df <- DATASETS$first_stage_df

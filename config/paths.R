@@ -6,7 +6,7 @@ PROJECT_ROOT <- "~/surfdrive/Narrating the Future (Bogdan)"
 
 # Data directories
 DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
+DIR_EXTRA_RAW <- file.path(PROJECT_ROOT, "Extra Raw Data")
 DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
 DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
 
@@ -17,12 +17,12 @@ DIR_SCRIPTS <- file.path(PROJECT_ROOT, "Bogdan R")
 DATASETS <- list(
   br_pt = c("br_pilot", "PTBR_277273", "PTBR_999625"),
   ch = c("CH_277273", "CH_999625"),
-  us = c("US_all", "US_216254", "US_868141"),
-  ch_us = c("CH_277273", "CH_999625", "US_all", "US_216254", "US_868141"),
+  us = c("US_216254", "US_868141"),
+  ch_us = c("CH_277273", "CH_999625", "US_216254", "US_868141"),
   ch_us_10_min = c("CH_277273", "US_868141"),
   first_stage = c(
     "CH_277273", "EN_277273", "ES_277273", "IT_277273",
-    "PTBR_277273", "SL_277273", "US_all", "IT_extra",
+    "PTBR_277273", "SL_277273", "IT_extra",
     "US_216254", "US_868141"
   ),
   first_stage_br_pt = c("PTBR_277273"),

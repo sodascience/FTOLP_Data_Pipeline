@@ -5,18 +5,17 @@ library(dplyr)
 library(labelled)
 library(readxl)
 library(lubridate)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "merge_functions.R"))
 
-# Set working directory to clean data
-setwd(DIR_CLEAN)
-
+# Load files from clean directory
 file_list <- list.files(
-  path = "./",
+  path = DIR_CLEAN,
   pattern = "\\.sav$",
-  full.names = TRUE,
+  full.names = TRUE
 )
 
 dfs <- lapply(file_list, read_sav)
@@ -106,6 +105,79 @@ scales_dataset_association <- list(
 )
 all_na_values <- unname(reason_codes)
 
+# Standardize column types before processing
+# First, identify all columns across all datasets and their types
+all_cols <- unique(unlist(lapply(dfs, names)))
+
+# Define categorical columns that should be converted to character (not numeric)
+categorical_cols <- c("id", "Nationality", "Religion_christianother", "Adults_brother", 
+                      "Origin", "Gender_other", "SexOrientation_other", "Race_other",
+                      "Racems_other", "Racenl_other", "Occupation_other", "Condition")
+
+for (col_name in all_cols) {
+  # Get the types of this column across all datasets that have it
+  col_types <- sapply(dfs, function(df) {
+    if (col_name %in% names(df)) {
+      if (is.labelled(df[[col_name]])) {
+        class(as.vector(df[[col_name]]))[1]
+      } else {
+        class(df[[col_name]])[1]
+      }
+    } else {
+      NA_character_
+    }
+  })
+  
+  col_types <- col_types[!is.na(col_types)]
+  
+  # If there are mixed types (character and numeric), standardize them
+  if (length(unique(col_types)) > 1) {
+    # Categorical columns -> character, others -> numeric
+    target_type <- if (col_name %in% categorical_cols) "character" else "numeric"
+    
+    message(sprintf("Standardizing column '%s' to %s (found types: %s)", 
+                    col_name, target_type, paste(unique(col_types), collapse=", ")))
+    
+    for (df_name in names(dfs)) {
+      if (col_name %in% names(dfs[[df_name]])) {
+        if (target_type == "character") {
+          # For character target: preserve labels if they exist, convert to factor then character
+          if (is.labelled(dfs[[df_name]][[col_name]])) {
+            dfs[[df_name]][[col_name]] <- as.character(as_factor(dfs[[df_name]][[col_name]]))
+          } else {
+            dfs[[df_name]][[col_name]] <- as.character(dfs[[df_name]][[col_name]])
+          }
+        } else {
+          # For numeric target: strip labels and convert to numeric
+          # Suppress expected "NAs introduced by coercion" warnings
+          dfs[[df_name]][[col_name]] <- suppressWarnings(
+            as.numeric(as.character(zap_labels(dfs[[df_name]][[col_name]])))
+          )
+        }
+      }
+    }
+  }
+}
+
+# Original type conversion loop (kept for any additional specific cases)
+for (df_name in names(dfs)) {
+  df <- dfs[[df_name]]
+  
+  # Convert character columns to numeric if they should be numeric
+  char_to_num_cols <- c("Nationality", "Religion_christianother", "Adults_brother")
+  
+  for (col in char_to_num_cols) {
+    if (col %in% names(df)) {
+      if (is.character(df[[col]]) || (is.labelled(df[[col]]) && is.character(as.vector(df[[col]])))) {
+        # Remove labels first, then convert character to numeric
+        df[[col]] <- as.numeric(as.character(zap_labels(df[[col]])))
+      }
+    }
+  }
+  
+  dfs[[df_name]] <- df
+}
+
 for (df_name in names(dfs)) {
   df <- dfs[[df_name]]
 
@@ -125,11 +197,15 @@ for (df_name in names(dfs)) {
           old_labels <- tryCatch(val_labels(column_data), error = function(e) NULL)
           column_data[is.na(column_data)] <- 999
 
-          # 3. Use labelled_spss to mark ALL codes as user-missing
+          # 3. Merge labels, removing duplicates (keep reason_codes for duplicates)
+          all_labels <- c(old_labels, reason_codes)
+          all_labels <- all_labels[!duplicated(all_labels)]
+
+          # 4. Use labelled_spss to mark ALL codes as user-missing
           labelled_spss(
             x = column_data,
             na_values = all_na_values,
-            labels = c(old_labels, reason_codes)
+            labels = all_labels
           )
         }
       )
@@ -147,10 +223,20 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
         .cols = where(is.numeric) | where(is.integer) | where(is.labelled),
         .fns = ~ {
           column_data <- .x
+          
+          # Skip if column is actually character (shouldn't happen but safety check)
+          if (is.character(column_data)) {
+            return(column_data)
+          }
 
           # CRITICAL: Temporarily remove the labelled class to disable the haven is.na() method.
           # This allows us to isolate true R NAs (padding) from numeric codes (999).
           unclassed_data <- unclass(column_data)
+          
+          # Another safety check: ensure unclassed_data is numeric
+          if (!is.numeric(unclassed_data)) {
+            return(column_data)
+          }
 
           # Use if_else to ONLY replace true NAs with the 990 code.
           column_data_replaced <- if_else(

@@ -5,12 +5,28 @@ library(dplyr)
 library(labelled)
 library(readxl)
 library(lubridate)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 
-# Set working directory to raw data
-setwd(DIR_RAW)
+# Helper function to read from raw data directory
+read_raw <- function(filename) {
+  read_sav(file.path(DIR_RAW, filename))
+}
+
+# Helper function to read from extra raw data directory
+read_extra_raw <- function(filename) {
+  read_sav(file.path(DIR_EXTRA_RAW, filename))
+}
+
+# Helper function to write to processed data directory
+write_processed <- function(df, filename) {
+  df <- df %>% select(where(~ !all(is.na(.))))
+  write_sav(df, file.path(DIR_PROCESSED, filename))
+}
+
+# Note: Using absolute paths with here() - no need to change working directory
 
 # !! NOTE: condensing other surveys as well, assuming correspondence (i.e., IT_IT1 = IT1)
 normalize_column_names <- function(df) {
@@ -116,11 +132,11 @@ brazil_pilot_fix_factors <- function(df) {
 }
 
 # Mozambique (all second stage)
-df_mz_online <- read_sav("276893.sav") %>%
+df_mz_online <- read_raw("276893.sav") %>%
   mutate(id = str_c("MZ_276893_", id))
-df_mz_printed <- read_sav("429283.sav") %>%
+df_mz_printed <- read_raw("429283.sav") %>%
   mutate(id = str_c("MZ_429283_", id))
-df_mz_3 <- read_sav("827663.sav") %>%
+df_mz_3 <- read_raw("827663.sav") %>%
   mutate(id = str_c("MZ_827663_", id))
 df_mz_online$printed <- 0
 df_mz_printed$printed <- 1
@@ -136,14 +152,14 @@ df_mz <- bind_rows(df_mz_online, df_mz_printed, df_mz_3) %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_mz, "../LimeSurvey Processed/MZ.sav")
+write_processed(df_mz, "MZ.sav")
 
 # 277273 -> main (IT1, pt & pt-BR, SL, China simplified and traditional )
 # participants for instance who selected portuguese but answered in chinese
 # split it into all corresponding datasets (except european pt vs brazilian pt)
 # chinese put them together
 # all first stage
-df_main1 <- read_sav("277273.sav")
+df_main1 <- read_raw("277273.sav")
 
 # change column names
 df_main1 <- df_main1 %>%
@@ -227,10 +243,10 @@ df_en <- df_main1 %>%
   filter(id %in% en_ids) %>%
   mutate(id = str_c("EN_277273_", id), dataset = "Oth")
 
-df_ptbr_duplicate_ids <- read_sav("../duplicates_PT&BR.sav") %>%
+df_ptbr_duplicate_ids <- read_sav(file.path(DIR_RAW, "..", "duplicates_PT&BR.sav")) %>%
   mutate(id = id - 22200000) %>%
   pull(id)
-df_ptbr_conditions <- read_sav("../conditions.sav")
+df_ptbr_conditions <- read_sav(file.path(DIR_RAW, "..", "conditions.sav"))
 
 df_ptbr <- df_main1 %>%
   filter(!(id %in% non_ptbr_ids | id %in% df_ptbr_duplicate_ids)) %>%
@@ -241,12 +257,12 @@ df_ptbr <- df_main1 %>%
   select(-Condition.x, -Condition.y)
 
 
-write_clean(df_main1_china, "../LimeSurvey Processed/CH_277273.sav")
-write_clean(df_sl, "../LimeSurvey Processed/SL_277273.sav")
-write_clean(df_it, "../LimeSurvey Processed/IT_277273.sav")
-write_clean(df_es, "../LimeSurvey Processed/ES_277273.sav")
-write_clean(df_en, "../LimeSurvey Processed/EN_277273.sav")
-write_clean(df_ptbr, "../LimeSurvey Processed/PTBR_277273.sav")
+write_processed(df_main1_china, "CH_277273.sav")
+write_processed(df_sl, "SL_277273.sav")
+write_processed(df_it, "IT_277273.sav")
+write_processed(df_es, "ES_277273.sav")
+write_processed(df_en, "EN_277273.sav")
+write_processed(df_ptbr, "PTBR_277273.sav")
 
 frequency_table <- df_main1 %>%
   # Convert to factor first
@@ -258,11 +274,11 @@ frequency_table <- df_main1 %>%
 
 # 569687.sav pilot only brazil
 # merge with DataSet BR&PT
-df_dataset_brpt <- read_sav("../Datasets/Brazil & Portugal/DataSet BR&PT.sav") %>%
+df_dataset_brpt <- read_sav(file.path(DIR_RAW, "..", "Datasets", "Brazil & Portugal", "DataSet BR&PT.sav")) %>%
   rename_with(~ str_replace(.x, "^FTOS_pilot(\\d+)$", "FTOS_pilot_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_pilot(\\d+)$", "LPS_pilot_\\1"))
 
-df_brazil_pilot <- read_sav("569687.sav") %>%
+df_brazil_pilot <- read_raw("569687.sav") %>%
   mutate(id = id + 11100000) %>%
   select(!starts_with("QSD") & !starts_with("Cod")) %>%
   rename(Email = email) # %>%
@@ -320,14 +336,11 @@ df_brazil_pilot_merged <- df_brazil_pilot %>%
   brazil_pilot_fix_factors() %>%
   filter(lastpage != -1)
 
-write_clean(
-  df_brazil_pilot_merged,
-  "../LimeSurvey Processed/br_pilot.sav"
-)
+write_processed(df_brazil_pilot_merged, "br_pilot.sav")
 
 # 824323.sav english india
 # second stage
-df_india <- read_sav("824323.sav") %>%
+df_india <- read_raw("824323.sav") %>%
   mutate(id = str_c("EN_IN_824323_", id), dataset = "EN_I") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -336,10 +349,10 @@ df_india <- read_sav("824323.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_india, "../LimeSurvey Processed/EN_IN_824323.sav")
+write_processed(df_india, "EN_IN_824323.sav")
 
 # 855796.sav IT3 second stage
-df_it3 <- read_sav("855796.sav") %>%
+df_it3 <- read_raw("855796.sav") %>%
   mutate(id = str_c("IT_855796_", id), strategy = "data collection 3", dataset = "IT") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -348,11 +361,11 @@ df_it3 <- read_sav("855796.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_it3, "../LimeSurvey Processed/IT_855796.sav")
+write_processed(df_it3, "IT_855796.sav")
 
 
 # 868141.sav US1 (messy) first stage
-df_us1 <- read_sav("868141.sav") %>%
+df_us1 <- read_raw("868141.sav") %>%
   mutate(id = str_c("US_868141_", id), strategy = "data collection 2", dataset = "US") %>%
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
@@ -361,10 +374,10 @@ df_us1 <- read_sav("868141.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_us1, "../LimeSurvey Processed/US_868141.sav")
+write_processed(df_us1, "US_868141.sav")
 
 # 999625.sav main second stage (multiple lang)
-df_main_2 <- read_sav("999625.sav") %>%
+df_main_2 <- read_raw("999625.sav") %>%
   filter(lastpage != -1) %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -451,7 +464,7 @@ df_EN_IN_999625 <- en_in_new %>%
     dataset = "EN_I"
   )
 
-write_clean(df_EN_IN_999625, "../LimeSurvey Processed/EN_IN_999625.sav")
+write_processed(df_EN_IN_999625, "EN_IN_999625.sav")
 
 # Update EN_999625 with proper formatting
 df_EN_999625 <- df_EN_999625 %>%
@@ -460,7 +473,7 @@ df_EN_999625 <- df_EN_999625 %>%
     dataset = "Oth"
   )
 
-write_clean(df_EN_999625, "../LimeSurvey Processed/EN_999625.sav")
+write_processed(df_EN_999625, "EN_999625.sav")
 
 # Update IN_99625 with proper formatting
 df_IN_99625 <- df_IN_99625 %>%
@@ -469,7 +482,7 @@ df_IN_99625 <- df_IN_99625 %>%
     dataset = "HI"
   )
 
-write_clean(df_IN_99625, "../LimeSurvey Processed/IN_999625.sav")
+write_processed(df_IN_99625, "IN_999625.sav")
 
 df_main2_other <- df_main_2 %>%
   filter(!(startlanguage == "hi" | startlanguage == "en")) %>%
@@ -505,14 +518,11 @@ df_main2_other <- df_main_2 %>%
   group_split(country) %>%
   walk(~ {
     this_country <- unique(.x$country)
-    write_clean(
-      .x,
-      glue::glue("../LimeSurvey Processed/{this_country}_999625.sav")
-    )
+    write_processed(.x, glue::glue("{this_country}_999625.sav"))
   })
 
 # 216254 also dataset from UOregon first stage
-df_us_oregon <- read_sav("216254.sav") %>%
+df_us_oregon <- read_raw("216254.sav") %>%
   mutate(id = str_c("US_216254_", id), strategy = "data collection 1", dataset = "US") %>%
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
@@ -521,14 +531,13 @@ df_us_oregon <- read_sav("216254.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_us_oregon, "../LimeSurvey Processed/US_216254.sav")
+write_processed(df_us_oregon, "US_216254.sav")
 
 # df_us <- bind_rows(df_us1, df_us_oregon)
-# write_clean(df_us, "../LimeSurvey Processed/US_all.sav")
+# write_processed(df_us, "US_all.sav")
 
-# extra datasets
-setwd(DIR_REAL_RAW)
-df_nl_extra <- read_sav("Dataset NL.sav") %>%
+# extra datasets (from extra raw data directory)
+df_nl_extra <- read_extra_raw("Dataset NL.sav") %>%
   mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -537,9 +546,9 @@ df_nl_extra <- read_sav("Dataset NL.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_clean(df_nl_extra, "../LimeSurvey Processed/NL_extra.sav")
+write_processed(df_nl_extra, "NL_extra.sav")
 
-df_ru_extra_main <- read_sav("Dataset_15.08.2022, RU (1).sav") %>%
+df_ru_extra_main <- read_extra_raw("Dataset_15.08.2022, RU (1).sav") %>%
   mutate(
     submitdate = ymd_hm(submitdate),
     Race_other = as.numeric(Race_other),
@@ -547,7 +556,7 @@ df_ru_extra_main <- read_sav("Dataset_15.08.2022, RU (1).sav") %>%
     across(starts_with("LPSgoals_goal") &
       ends_with("_age"), as.numeric)
   )
-df_ru_extra_second <- read_excel("participants_rus.xlsx")
+df_ru_extra_second <- read_excel(file.path(DIR_EXTRA_RAW, "participants_rus.xlsx"))
 df_ru_extra_second$id <- 101:(100 + nrow(df_ru_extra_second))
 
 df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
@@ -558,9 +567,9 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
   normalize_column_names() %>%
   mutate(strategy = "data collection 2", dataset = "RU")
 
-write_clean(df_ru_extra, "../LimeSurvey Processed/RU_extra.sav")
+write_processed(df_ru_extra, "RU_extra.sav")
 
-df_ar_extra <- read_sav("Dataset AR.sav 16.4.2023.sav", encoding = "latin1") %>%
+df_ar_extra <- read_sav(file.path(DIR_EXTRA_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
@@ -574,11 +583,11 @@ df_ar_extra <- df_ar_extra %>%
   mutate(printed = 1)
 
 
-write_clean(df_ar_extra, "../LimeSurvey Processed/AR_extra.sav")
+write_processed(df_ar_extra, "AR_extra.sav")
 
 # south africa
 # other scales randomly assigned
-df_sa <- read_sav("Dataset SA [full].sav") %>%
+df_sa <- read_extra_raw("Dataset SA [full].sav") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   # special CAAS
@@ -586,13 +595,13 @@ df_sa <- read_sav("Dataset SA [full].sav") %>%
   normalize_column_names() %>%
   mutate(id = str_c("SA_extra_", id), dataset = "SA")
 
-write_clean(df_sa, "../LimeSurvey Processed/SA_extra.sav")
+write_processed(df_sa, "SA_extra.sav")
 
 # italy extra
-df_it2 <- read_sav("Dataset IT2.sav") %>%
+df_it2 <- read_extra_raw("Dataset IT2.sav") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   normalize_column_names() %>%
   mutate(id = str_c("IT_extra", id), strategy = "data collection 2", dataset = "IT")
 
-write_clean(df_it2, "../LimeSurvey Processed/IT_extra.sav")
+write_processed(df_it2, "IT_extra.sav")

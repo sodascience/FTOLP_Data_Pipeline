@@ -82,7 +82,7 @@ PROJECT_ROOT <- "~/surfdrive/Narrating the Future (Bogdan)"
 
 # Data directories
 DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
+DIR_EXTRA_RAW <- file.path(PROJECT_ROOT, "Extra Raw Data")
 DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
 DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
 ```
@@ -105,6 +105,8 @@ Run scripts in the following order:
 - Export processed .sav files to `LimeSurvey Processed/`
 
 **Output**: Individual country/wave datasets ready for cleaning
+
+**Important**: The script uses absolute paths via the `here` package and configuration files, so it can be run multiple times without path issues.
 
 ```r
 source("src/pipeline/01_split_raw.R")

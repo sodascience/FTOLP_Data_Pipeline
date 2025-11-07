@@ -5,15 +5,15 @@ library(dplyr)
 library(labelled)
 library(readxl)
 library(lubridate)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 
-# Set working directory to processed data
-setwd(DIR_PROCESSED)
+# Note: Using absolute paths from config - no need to change working directory
 
-df1 <- read_sav("US_868141.sav")
-df2 <- read_sav("US_216254.sav")
+df1 <- read_sav(file.path(DIR_PROCESSED, "US_868141.sav"))
+df2 <- read_sav(file.path(DIR_PROCESSED, "US_216254.sav"))
 
 compare_dfs_compact <- function(x, y, ignore_order = FALSE, na_equal = TRUE, short_circuit = TRUE) {
   stopifnot(is.data.frame(x), is.data.frame(y))

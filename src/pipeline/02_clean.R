@@ -5,18 +5,23 @@ library(dplyr)
 library(labelled)
 library(tools)
 library(writexl)
+library(here)
 
 # Load configuration
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
 
-# Set working directory to processed data
-setwd(DIR_PROCESSED)
+# Create clean directory if it doesn't exist
+if (!dir.exists(DIR_CLEAN)) {
+  dir.create(DIR_CLEAN, recursive = TRUE)
+  message("Created directory: ", DIR_CLEAN)
+}
 
+# Load files from processed directory
 file_list <- list.files(
-  path = "./",
+  path = DIR_PROCESSED,
   pattern = "\\.sav$",
-  full.names = TRUE,
+  full.names = TRUE
 )
 
 # Dataset groupings (loaded from config)
@@ -286,7 +291,7 @@ for (f in file_list) {
 
       all_summaries[[name]] <- summary_wide
 
-      write_sav(df_clean, file.path("clean", paste0(name, "_clean.sav")))
+      write_sav(df_clean, file.path(DIR_CLEAN, paste0(name, "_clean.sav")))
       # write_csv(summary_wide, paste0(name, "_summary.csv"))
       assign(paste0("df_", name), df, envir = .GlobalEnv)
     },
@@ -313,7 +318,7 @@ for (dataset_name in us) {
   tryCatch(
     {
       # Load the already cleaned file
-      clean_file <- file.path("clean", paste0(dataset_name, "_clean.sav"))
+      clean_file <- file.path(DIR_CLEAN, paste0(dataset_name, "_clean.sav"))
       if (file.exists(clean_file)) {
         df_clean <- read_sav(clean_file)
 
@@ -322,7 +327,7 @@ for (dataset_name in us) {
         df_more_filtered <- res_more$df_clean
 
         # Save with _clean_more_filters suffix
-        write_sav(df_more_filtered, file.path("clean", paste0(dataset_name, "_clean_more_filters.sav")))
+        write_sav(df_more_filtered, file.path(DIR_CLEAN, paste0(dataset_name, "_clean_more_filters.sav")))
         message("Created ", dataset_name, "_clean_more_filters.sav")
       } else {
         message("Clean file not found for ", dataset_name)
