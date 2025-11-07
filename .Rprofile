@@ -1,3 +1,4 @@
+source("renv/activate.R")
 # .Rprofile for FTOLP Data Pipeline
 # This file is automatically loaded when you open this R project
 
