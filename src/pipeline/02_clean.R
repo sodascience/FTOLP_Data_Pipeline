@@ -6,11 +6,12 @@ library(labelled)
 library(tools)
 library(writexl)
 
-setwd("~/surfdrive/Narrating the Future (Bogdan)")
-source("Bogdan R/utils_cleaning.R")
+# Load configuration
+source(here::here("config", "paths.R"))
+source(here::here("src", "utils", "cleaning_functions.R"))
 
-# load files
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Processed")
+# Set working directory to processed data
+setwd(DIR_PROCESSED)
 
 file_list <- list.files(
   path = "./",
@@ -18,26 +19,15 @@ file_list <- list.files(
   full.names = TRUE,
 )
 
-br_pt <- c("br_pilot", "PTBR_277273", "PTBR_999625")
-ch <- c("CH_277273", "CH_999625")
-us <- c("US_all", "US_216254", "US_868141")
-ch_us <- c(ch, us)
-ch_us_10_min <- c("CH_277273", "US_868141")
-first_stage <- c(
-  "CH_277273",
-  "EN_277273",
-  "ES_277273",
-  "IT_277273",
-  "PTBR_277273",
-  "SL_277273",
-  "US_all",
-  "IT_extra",
-  "US_216254",
-  "US_868141"
-)
-
-first_stage_br_pt <- c("PTBR_277273")
-first_stage_ch <- c("CH_277273")
+# Dataset groupings (loaded from config)
+br_pt <- DATASETS$br_pt
+ch <- DATASETS$ch
+us <- DATASETS$us
+ch_us <- DATASETS$ch_us
+ch_us_10_min <- DATASETS$ch_us_10_min
+first_stage <- DATASETS$first_stage
+first_stage_br_pt <- DATASETS$first_stage_br_pt
+first_stage_ch <- DATASETS$first_stage_ch
 
 # AS (BR, PT, CH, US), MiLQ (BR, PT, CH, US), CIPIP (BR, PT), LS (CH), Grit (US)
 

@@ -2,7 +2,11 @@ library(haven)
 library(ggplot2)
 library(dplyr)
 
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Processed")
+# Load configuration
+source(here::here("config", "paths.R"))
+
+# Set working directory to processed data
+setwd(DIR_PROCESSED)
 
 file_list <- list.files(
   path = "./",

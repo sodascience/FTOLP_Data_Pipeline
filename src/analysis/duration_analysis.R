@@ -5,10 +5,14 @@ library(dplyr)
 library(labelled)
 library(tools)
 
-# load files
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Processed/clean")
+# Load configuration
+source(here::here("config", "paths.R"))
 
-first_stage_df <- c("EN_277273", "ES_277273", "IT_277273", "PTBR_277273", "SL_277273")
+# Set working directory to clean data
+setwd(DIR_CLEAN)
+
+# Dataset grouping
+first_stage_df <- DATASETS$first_stage_df
 
 
 parse_time <- function(x, tz = "UTC") {

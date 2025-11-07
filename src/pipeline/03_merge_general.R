@@ -6,11 +6,12 @@ library(labelled)
 library(readxl)
 library(lubridate)
 
-setwd("~/surfdrive/Narrating the Future (Bogdan)")
-source("Bogdan R/merge_helper.R")
+# Load configuration
+source(here::here("config", "paths.R"))
+source(here::here("src", "utils", "merge_functions.R"))
 
-# load files
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Processed/clean")
+# Set working directory to clean data
+setwd(DIR_CLEAN)
 
 file_list <- list.files(
   path = "./",

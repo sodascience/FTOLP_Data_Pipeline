@@ -6,7 +6,11 @@ library(labelled)
 library(readxl)
 library(lubridate)
 
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Raw")
+# Load configuration
+source(here::here("config", "paths.R"))
+
+# Set working directory to raw data
+setwd(DIR_RAW)
 
 # !! NOTE: condensing other surveys as well, assuming correspondence (i.e., IT_IT1 = IT1)
 normalize_column_names <- function(df) {
@@ -523,7 +527,7 @@ write_clean(df_us_oregon, "../LimeSurvey Processed/US_216254.sav")
 # write_clean(df_us, "../LimeSurvey Processed/US_all.sav")
 
 # extra datasets
-setwd("~/surfdrive/Narrating the Future (Bogdan)/Real Raw Data")
+setwd(DIR_REAL_RAW)
 df_nl_extra <- read_sav("Dataset NL.sav") %>%
   mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%

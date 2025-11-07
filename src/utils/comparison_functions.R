@@ -6,7 +6,11 @@ library(labelled)
 library(readxl)
 library(lubridate)
 
-setwd("~/surfdrive/Narrating the Future (Bogdan)/LimeSurvey Processed")
+# Load configuration
+source(here::here("config", "paths.R"))
+
+# Set working directory to processed data
+setwd(DIR_PROCESSED)
 
 df1 <- read_sav("US_868141.sav")
 df2 <- read_sav("US_216254.sav")
