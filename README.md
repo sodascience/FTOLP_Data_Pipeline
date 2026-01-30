@@ -78,11 +78,11 @@ Before running the pipeline, configure your paths in `config/paths.R`:
 
 ```r
 # Base project directory
-PROJECT_ROOT <- "~/surfdrive/Narrating the Future (Bogdan)"
+PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/Narrating the Future (Bogdan)"
 
 # Data directories
 DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_EXTRA_RAW <- file.path(PROJECT_ROOT, "Extra Raw Data")
+DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
 DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
 DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
 ```

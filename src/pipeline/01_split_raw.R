@@ -3,7 +3,7 @@
 # PURPOSE: Load raw LimeSurvey data, preprocess, split by country/language, 
 #          and output to processed directory
 # 
-# INPUT:  Raw .sav files from DIR_RAW and DIR_EXTRA_RAW
+# INPUT:  Raw .sav files from DIR_RAW and DIR_REAL_RAW
 # OUTPUT: Processed .sav files in DIR_PROCESSED (split by country/dataset)
 # 
 # WORKFLOW:
@@ -25,7 +25,7 @@ library(readxl)      # Read Excel files
 library(lubridate)   # Date/time manipulation
 library(here)        # Project-relative paths
 
-# Load configuration file containing directory paths (DIR_RAW, DIR_EXTRA_RAW, DIR_PROCESSED)
+# Load configuration file containing directory paths (DIR_RAW, DIR_REAL_RAW, DIR_PROCESSED)
 source(here::here("config", "paths.R"))
 
 # =============================================================================
@@ -38,10 +38,10 @@ read_raw <- function(filename) {
   read_sav(file.path(DIR_RAW, filename))
 }
 
-# Read SPSS file from extra raw data directory  
+# Read SPSS file from real raw data directory  
 # Used for manually curated datasets (e.g., Dataset NL.sav, Dataset AR.sav)
 read_extra_raw <- function(filename) {
-  read_sav(file.path(DIR_EXTRA_RAW, filename))
+  read_sav(file.path(DIR_REAL_RAW, filename))
 }
 
 # Write dataframe to processed directory
@@ -1056,9 +1056,9 @@ write_processed(df_us_oregon, "US_216254.sav")
 # write_processed(df_us, "US_all.sav")
 
 # ============================================================================
-# SECTION 9: EXTRA DATASETS (from Extra Raw Data directory)
+# SECTION 9: EXTRA DATASETS (from Real Raw Data directory)
 # ============================================================================
-# SOURCE: Various manually curated datasets from "Extra Raw Data" directory
+# SOURCE: Various manually curated datasets from "Real Raw Data" directory
 #         These are datasets collected separately or received after main surveys
 #
 # INCLUDED COUNTRIES:
@@ -1123,7 +1123,7 @@ df_ru_extra_main <- read_extra_raw("Dataset_15.08.2022, RU (1).sav") %>%
   )
 
 # Load supplementary Russian participants from Excel file
-df_ru_extra_second <- read_excel(file.path(DIR_EXTRA_RAW, "participants_rus.xlsx"))
+df_ru_extra_second <- read_excel(file.path(DIR_REAL_RAW, "participants_rus.xlsx"))
 
 # Create IDs for Excel participants (starting from 101 to avoid conflicts)
 df_ru_extra_second$id <- 101:(100 + nrow(df_ru_extra_second))
@@ -1155,7 +1155,7 @@ write_processed(df_ru_extra, "RU_extra.sav")
 # ADMINISTRATION: Printed paper survey (printed=1)
 # NOTE: Uses latin1 encoding (Spanish characters)
 # OUTPUT: AR_extra.sav
-df_ar_extra <- read_sav(file.path(DIR_EXTRA_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
+df_ar_extra <- read_sav(file.path(DIR_REAL_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
