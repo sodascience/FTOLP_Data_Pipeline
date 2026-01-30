@@ -2,7 +2,7 @@
 # Modify these paths according to your local setup
 
 # Base project directory
-PROJECT_ROOT <- "~/surfdrive/Narrating the Future (Bogdan)"
+PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/Narrating the Future (Bogdan)"
 
 # Data directories
 DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
