@@ -6,7 +6,7 @@ PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdri
 
 # Data directories
 DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_EXTRA_RAW <- file.path(PROJECT_ROOT, "Extra Raw Data")
+DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
 DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
 DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
 
