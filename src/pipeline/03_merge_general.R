@@ -46,12 +46,32 @@ source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "merge_functions.R"))
 
 # ============================================================================
+# COLLAPSE MISSING VALUE CODES FOR SPSS COMPATIBILITY
+# ============================================================================
+# SPSS only allows 3 user-missing values per variable
+# Collapse the 7 codes from merge_functions.R into 3:
+#   990 = "Variable not included" (by_design)
+#   991 = "Technical/other issues" (unknown_missing, tech_error, dubious, not_applicable)
+#   993 = "Did not respond" (refused, nonresponse)
+# ============================================================================
+reason_codes_collapsed <- c(
+  "by_design"       = 990,
+  "unknown_missing" = 991,
+  "tech_error"      = 991,
+  "refused"         = 993,
+  "dubious"         = 991,
+  "nonresponse"     = 993,
+  "not_applicable"  = 991
+)
+
+# Use collapsed version throughout this script
+reason_codes <- reason_codes_collapsed
+
+# ============================================================================
 # LOAD ALL CLEANED DATASETS
 # ============================================================================
 # Read all .sav files from clean directory and store in named list
 # ============================================================================
-
-# Get list of all cleaned SPSS files
 file_list <- list.files(
   path = DIR_CLEAN,                   # Clean directory (output from 02_clean.R)
   pattern = "\\.sav$",                # Only .sav files
@@ -104,9 +124,14 @@ dfs_long_adults <- dfs |>
 # Step 2: Extract Adults_other column separately (open-ended text)
 # This needs special handling because it's not a checkbox
 df_other_info <- dfs_long_adults |>
-  map(~ .x |>
-    select(id, Adults_other) |>       # Just id and open-ended field
-    distinct()) |>                    # Remove duplicate rows
+  map(~ {
+    if ("Adults_other" %in% names(.x)) {
+      .x |> select(id, Adults_other) |> distinct()
+    } else {
+      NULL
+    }
+  }) |>
+  compact() |>  # Remove NULL entries
   bind_rows() |>
   distinct(id, .keep_all = TRUE)      # Keep first occurrence per id
 
@@ -116,7 +141,7 @@ df_wide_adults <- dfs_long_adults |>
     ~ .x |>
       # Pivot from wide to long: one row per selected adult type
       pivot_longer(
-        cols = -c(id, Adults_other),  # All Adults_ columns except Adults_other
+        cols = -c(id, starts_with("Adults_other")),  # All Adults_ columns except Adults_other
         names_to = "adult_type",       # Column names → "adult_type" column
         values_to = "selected"         # Cell values → "selected" column (1 or 0)
       ) |>
@@ -149,6 +174,20 @@ df_wide_adults <- dfs_long_adults |>
   
   # Re-attach Adults_other column (open-ended responses)
   left_join(df_other_info, by = "id")
+
+# Step 4: Replace Adults columns in original datasets with processed version
+# Remove old wide-format Adults_ columns and merge in long-format versions
+for (df_name in names(dfs)) {
+  if (any(startsWith(names(dfs[[df_name]]), "Adults_"))) {
+    # Remove all Adults_ columns
+    dfs[[df_name]] <- dfs[[df_name]] |>
+      select(-starts_with("Adults_"))
+    
+    # Merge in the processed long-format Adults data
+    dfs[[df_name]] <- dfs[[df_name]] |>
+      left_join(df_wide_adults, by = "id")
+  }
+}
 
 # ============================================================================
 # SCALE-DATASET ASSOCIATIONS (REFERENCE)
@@ -194,7 +233,9 @@ scales_dataset_association <- list(
 
 # Define SPSS missing value codes
 # These will be applied to all numeric columns when merging
-all_na_values <- unname(reason_codes)         # 990-999 codes from merge_functions.R
+# NOTE: SPSS only allows up to 3 user-missing values per variable
+# We use: 990 (Variable not included), 991 (Technical/other), 993 (Did not respond)
+all_na_values <- c(990, 991, 993)
 
 # ============================================================================
 # TYPE STANDARDIZATION: Fix Mixed Column Types
@@ -234,6 +275,7 @@ categorical_cols <- c(
   "Racems_other",                # Race other (Malaysia-specific)
   "Racenl_other",                # Race other (Netherlands-specific)
   "Occupation_other",            # Open-ended occupation response
+  "occupation_other",            # Lowercase version of Occupation_other
   "Condition"                    # Experimental condition (text label)
 )
 
@@ -349,7 +391,7 @@ for (df_name in names(dfs)) {
   df_labeled <- df %>%
     mutate(
       across(
-        .cols = everything(),                    # All columns
+        .cols = where(~ is.numeric(.x) || is.integer(.x)),  # Only numeric/integer columns
         .fns = ~ {
           # Skip non-numeric columns (character IDs, open-ended text, etc.)
           if (!is.numeric(.x) & !is.integer(.x)) {
@@ -357,24 +399,39 @@ for (df_name in names(dfs)) {
             return(.x)
           }
 
-          # Step 1: Temporarily replace R NAs with 999
+          # Step 1: Temporarily replace R NAs with 993 (nonresponse)
           # This ensures true R NAs get labeled (not left as unlabeled missing)
           column_data <- .x
           old_labels <- tryCatch(val_labels(column_data), error = function(e) NULL)
-          column_data[is.na(column_data)] <- 999
+          column_data[is.na(column_data)] <- 993
 
-          # Step 2: Merge existing labels with reason_codes
-          # Remove duplicates (keep reason_codes version for consistency)
-          all_labels <- c(old_labels, reason_codes)
-          all_labels <- all_labels[!duplicated(all_labels)]
+          # Step 2: Create limited label set (only unique labels)
+          # Start with the 3 missing value codes
+          limited_labels <- c(
+            "by_design" = 990,
+            "technical_other" = 991,
+            "did_not_respond" = 993
+          )
+          
+          # Add existing labels for non-missing values (avoid duplicates)
+          if (!is.null(old_labels)) {
+            # Remove any old labels with values in the 990-999 range
+            non_missing_labels <- old_labels[!(old_labels %in% 990:999)]
+            # Remove any labels that have duplicate values
+            limited_labels <- c(non_missing_labels, limited_labels)
+            # Keep only unique values (first occurrence)
+            limited_labels <- limited_labels[!duplicated(limited_labels)]
+            # Also ensure unique names
+            limited_labels <- limited_labels[!duplicated(names(limited_labels))]
+          }
 
-          # Step 3: Apply SPSS labelled format with missing value codes
-          # na_values = codes to mark as user-missing (990-999)
+          # Step 3: Apply SPSS labelled format with limited missing value codes
+          # na_values = only 3 codes (SPSS limit)
           # labels = value-to-label mapping
           labelled_spss(
             x = column_data,
-            na_values = all_na_values,           # 990-999 marked as missing
-            labels = all_labels                  # Labels for all codes
+            na_values = all_na_values,           # Only 990, 991, 993 (3 codes max)
+            labels = limited_labels              # Labels for present values + missing codes
           )
         }
       )
@@ -383,6 +440,63 @@ for (df_name in names(dfs)) {
   # Save labeled dataset back to list
   dfs[[df_name]] <- df_labeled
 }
+
+# ============================================================================
+# STANDARDIZE COLUMN NAMES (Fix SPSS Case-Insensitive Duplicates)
+# ============================================================================
+# PROBLEM: SPSS treats column names as case-insensitive
+#          "Occupation_student" and "occupation_student" are duplicates in SPSS
+#          "Name" and "name" are also duplicates
+#
+# SOLUTION: Standardize all column names to lowercase
+#           Handle special cases where different columns have same lowercase name
+# ============================================================================
+
+for (df_name in names(dfs)) {
+  df <- dfs[[df_name]]
+  
+  # Get original column names
+  original_names <- names(df)
+  
+  # Convert to lowercase
+  new_names <- tolower(original_names)
+  
+  # Check for duplicates after lowercasing
+  if (any(duplicated(new_names))) {
+    dupes <- new_names[duplicated(new_names)]
+    message(sprintf("Dataset '%s' has duplicate column names after lowercasing: %s", 
+                    df_name, paste(unique(dupes), collapse=", ")))
+    
+    # Handle Name/name conflict: keep lowercase 'name', rename uppercase 'Name' to 'participant_name'
+    for (i in seq_along(original_names)) {
+      if (original_names[i] == "Name" && "name" %in% original_names) {
+        new_names[i] <- "participant_name"
+      }
+    }
+    
+    # If still duplicates, add suffix
+    if (any(duplicated(new_names))) {
+      new_names <- make.unique(new_names, sep = "_")
+    }
+  }
+  
+  # Apply new names
+  names(df) <- new_names
+  
+  # Convert occupation_other to character to ensure consistency
+  if ("occupation_other" %in% names(df)) {
+    df$occupation_other <- as.character(df$occupation_other)
+  }
+  
+  # Save back to list
+  dfs[[df_name]] <- df
+}
+
+# Update all_cols with lowercase names
+all_cols <- unique(unlist(lapply(dfs, names)))
+
+# Update categorical_cols to lowercase
+categorical_cols <- tolower(categorical_cols)
 
 # ============================================================================
 # DEFINE FUNCTION: label_merge_NAs()
@@ -424,11 +538,11 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
           }
 
           # CRITICAL FIX: Temporarily remove labelled class
-          # Haven's is.na() method treats code 999 as NA (by design)
-          # unclass() restores normal R behavior: is.na(999) = FALSE
+          # Haven's is.na() method treats code 993 as NA (by design)
+          # unclass() restores normal R behavior: is.na(993) = FALSE
           # This lets us distinguish:
           #   - True R NA (padding from bind_rows) → replace with 990
-          #   - Numeric 999 (existing missing code) → leave alone
+          #   - Numeric 993 (existing missing code) → leave alone
           unclassed_data <- unclass(column_data)
           
           # Another safety check: ensure unclassed_data is numeric
@@ -439,25 +553,39 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
           # Replace ONLY true R NAs with code 990
           # if_else preserves numeric type (no coercion)
           column_data_replaced <- if_else(
-            is.na(unclassed_data),               # TRUE only for R NA (not 999)
+            is.na(unclassed_data),               # TRUE only for R NA (not 993)
             as.numeric(code_to_assign),          # Replace with 990
-            unclassed_data                       # Keep existing values (including 999)
+            unclassed_data                       # Keep existing values (including 993)
           )
+
+          # Get existing labels (only keep unique, non-missing value labels)
+          old_labels <- tryCatch(val_labels(column_data), error = function(e) NULL)
+          limited_labels <- c(
+            "by_design" = 990,
+            "technical_other" = 991,
+            "did_not_respond" = 993
+          )
+          
+          if (!is.null(old_labels)) {
+            # Remove old labels with values in 990-999 range
+            non_missing_labels <- old_labels[!(old_labels %in% 990:999)]
+            limited_labels <- c(non_missing_labels, limited_labels)
+            # Remove duplicates by value
+            limited_labels <- limited_labels[!duplicated(limited_labels)]
+            # Remove duplicates by name
+            limited_labels <- limited_labels[!duplicated(names(limited_labels))]
+          }
 
           # Re-apply labelled_spss class with all metadata
           # This maintains SPSS compatibility
           labelled_spss(
             x = column_data_replaced,
-            na_values = all_na_values,           # Mark 990-999 as missing
-            labels = reason_codes                # Apply standard labels
+            na_values = all_na_values,           # Only 990, 991, 993 (3 codes max)
+            labels = limited_labels              # Apply limited label set
           )
         }
       )
     )
-
-  # Optional success message (commented out to reduce console noise)
-  # message(sprintf("Successfully assigned new NAs as '%s' (%d) while preserving existing codes.",
-  #                assign_label, code_to_assign))
 
   return(df_labeled)
 }
@@ -467,28 +595,14 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
 # ============================================================================
 # Final step: Combine all datasets and handle merge-created NAs
 # ============================================================================
-
-# Merge all datasets into single dataframe
-# bind_rows() stacks all datasets (rows from all datasets combined)
-# Creates NAs for columns not present in all datasets (padding)
-combined_df <- label_merge_NAs(bind_rows(dfs))
+merged_df <- label_merge_NAs(bind_rows(dfs))
 
 # ============================================================================
-# END OF 03_merge_general.R
+# SAVE COMBINED DATASET
 # ============================================================================
-# SUMMARY: Successfully merged ~40 cleaned datasets into single dataframe
-#
-# KEY ACCOMPLISHMENTS:
-#   - Fixed Adults columns (wide → long format with rankings)
-#   - Standardized mixed column types (categorical→character, numeric→numeric)
-#   - Labeled all missing values with SPSS codes (990-999)
-#   - Properly distinguished padding NAs (990) from true missing (999)
-#   - Maintained SPSS compatibility (labelled_spss format)
-#
-# OUTPUT: combined_df in global environment
-#   - Contains all participants from all datasets
-#   - ~1000+ columns (all scales + demographics from all countries)
-#   - Ready for analysis or SPSS export
-#
-# NEXT STEP: Analyze combined_df or export to SPSS with write_sav()
+# Write the combined dataset to SPSS (.sav file), CSV and EXCEL formats under merged directory
 # ============================================================================
+output_file_name <- file.path(DIR_CLEAN, "merged", "merged_dataset")
+write_sav(merged_df, paste0(output_file_name, ".sav"))
+write_csv(merged_df, paste0(output_file_name, ".csv"))
+write_xlsx(merged_df, paste0(output_file_name, ".xlsx"))
