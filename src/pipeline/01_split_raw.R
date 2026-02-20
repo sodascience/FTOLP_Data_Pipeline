@@ -3,8 +3,8 @@
 # PURPOSE: Load raw LimeSurvey data, preprocess, split by country/language, 
 #          and output to processed directory
 # 
-# INPUT:  Raw .sav files from DIR_RAW and DIR_REAL_RAW
-# OUTPUT: Processed .sav files in DIR_PROCESSED (split by country/dataset)
+# INPUT:  Raw .sav files from DIR_RAW and DIR_EXTERNAL
+# OUTPUT: Processed .sav files in DIR_SPLIT (split by country/dataset)
 # 
 # WORKFLOW:
 #   1. Load raw survey data from LimeSurvey exports
@@ -25,7 +25,7 @@ library(readxl)      # Read Excel files
 library(lubridate)   # Date/time manipulation
 library(here)        # Project-relative paths
 
-# Load configuration file containing directory paths (DIR_RAW, DIR_REAL_RAW, DIR_PROCESSED)
+# Load configuration file containing directory paths (DIR_RAW, DIR_SPLIT)
 source(here::here("config", "paths.R"))
 
 # =============================================================================
@@ -38,17 +38,28 @@ read_raw <- function(filename) {
   read_sav(file.path(DIR_RAW, filename))
 }
 
-# Read SPSS file from real raw data directory  
-# Used for manually curated datasets (e.g., Dataset NL.sav, Dataset AR.sav)
-read_extra_raw <- function(filename) {
-  read_sav(file.path(DIR_REAL_RAW, filename))
-}
-
 # Write dataframe to processed directory
 # Automatically removes columns that are entirely NA before saving
+# Creates country-specific subdirectory if it doesn't exist
 write_processed <- function(df, filename) {
   df <- df %>% select(where(~ !all(is.na(.))))  # Drop all-NA columns
-  write_sav(df, file.path(DIR_PROCESSED, filename))
+  
+  # Extract country code from filename (first part before underscore)
+  # Examples: CH_277273.sav -> CH, IN_EN_824323.sav -> IN, br_pilot.sav -> BR
+  base_name <- str_remove(filename, "\\.sav$")
+  country_code <- str_to_upper(str_split(base_name, "_")[[1]][1])
+  
+  # Create country-specific directory if it doesn't exist
+  country_dir <- file.path(DIR_SPLIT, country_code)
+  if (!dir.exists(country_dir)) {
+    dir.create(country_dir, recursive = TRUE)
+    message(sprintf("Created directory: %s", country_dir))
+  }
+  
+  # Save to country-specific directory
+  output_path <- file.path(country_dir, filename)
+  write_sav(df, output_path)
+  message(sprintf("Saved: %s", output_path))
 }
 
 # Normalize and standardize column names across different survey versions
@@ -491,12 +502,12 @@ df_en <- df_main1 %>%
 
 # Load list of duplicate IDs to exclude (stored in external file)
 # IDs stored with offset, need to subtract 22200000 to match df_main1 IDs
-df_ptbr_duplicate_ids <- read_sav(file.path(DIR_RAW, "..", "duplicates_PT&BR.sav")) %>%
+df_ptbr_duplicate_ids <- read_sav(file.path(DIR_EXTERNAL, "duplicates_PT&BR.sav")) %>%
   mutate(id = id - 22200000) %>%
   pull(id)
 
 # Load experimental condition assignments (for merging additional metadata)
-df_ptbr_conditions <- read_sav(file.path(DIR_RAW, "..", "conditions.sav"))
+df_ptbr_conditions <- read_sav(file.path(DIR_EXTERNAL, "conditions.sav"))
 
 # PORTUGUESE/BRAZILIAN dataset (default: all remaining participants)
 df_ptbr <- df_main1 %>%
@@ -570,7 +581,7 @@ frequency_table <- df_main1 %>%
 # ----------------------------------------------------------------------------
 # LOAD EXTERNAL DATASET: DataSet BR&PT (contains FTOS/LPS pilot scales)
 # ----------------------------------------------------------------------------
-df_dataset_brpt <- read_sav(file.path(DIR_RAW, "..", "Datasets", "Brazil & Portugal", "DataSet BR&PT.sav")) %>%
+df_dataset_brpt <- read_sav(file.path(DIR_EXTERNAL, "DataSet BR&PT.sav")) %>%
   # Standardize FTOS pilot column names: "FTOS_pilot1" -> "FTOS_pilot_1"
   rename_with(~ str_replace(.x, "^FTOS_pilot(\\d+)$", "FTOS_pilot_\\1")) %>%
   
@@ -698,11 +709,11 @@ write_processed(df_brazil_pilot_merged, "br_pilot.sav")
 # SURVEY STAGE: Second stage (shorter follow-up questionnaire)
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # LANGUAGE: English
-# OUTPUT: EN_IN_824323.sav
+# OUTPUT: IN_EN_824323.sav
 # ============================================================================
 df_india <- read_raw("824323.sav") %>%
-  # Create ID with country/language prefix: EN_IN (English-India)
-  mutate(id = str_c("EN_IN_824323_", id), dataset = "EN_I") %>%
+  # Create ID with country/language prefix: IN_EN (English-India)
+  mutate(id = str_c("IN_EN_824323_", id), dataset = "EN_I") %>%
   
   # Standardize to version 2 scale names (second stage)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -716,7 +727,7 @@ df_india <- read_raw("824323.sav") %>%
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_processed(df_india, "EN_IN_824323.sav")
+write_processed(df_india, "IN_EN_824323.sav")
 
 # ============================================================================
 # SECTION 5: ITALY DATA COLLECTION 3 (855796.sav)
@@ -790,12 +801,12 @@ write_processed(df_us1, "US_868141.sav")
 #   1. Split by initial language (en vs hi)
 #   2. Move EN participants with "Caste" data to IN (Indian-specific field)
 #   3. Move IN participants with FTOS responses but no Caste to EN
-#   4. Further split EN into EN (non-Indian) and EN_IN (Indian English speakers)
+#   4. Further split EN into EN (non-Indian) and IN_EN (Indian English speakers)
 #   5. Process remaining languages (Spanish, Portuguese, Chinese, etc.)
 #
 # OUTPUTS:
 #   - EN_999625.sav (English, non-Indian)
-#   - EN_IN_999625.sav (English, Indian participants)
+#   - IN_EN_999625.sav (English, Indian participants)
 #   - IN_999625.sav (Hindi, Indian participants)
 #   - Multiple country-specific files (MX, RU, AR, CH, IT, NL, etc.)
 # ============================================================================
@@ -883,7 +894,7 @@ df_IN_99625 <- df_IN_99625 %>%
 df_EN_999625 <- bind_rows(df_EN_999625, in_with_ftos_no_Caste)
 
 # ----------------------------------------------------------------------------
-# STEP 4: Further split EN into EN (non-Indian) and EN_IN (Indian English speakers)
+# STEP 4: Further split EN into EN (non-Indian) and IN_EN (Indian English speakers)
 # ----------------------------------------------------------------------------
 
 # Remove problematic participant ID 3729 (data quality issue)
@@ -904,8 +915,8 @@ en_keep <- df_EN_999625 %>%
     Origin %in% c("canada", "Asian", "Indonesia", "Malaysia", "MALAYSIA")
   )
 
-# Remaining EN participants are Indian English speakers -> move to EN_IN
-en_in_new <- df_EN_999625 %>%
+# Remaining EN participants are Indian English speakers -> move to IN_EN
+in_en_new <- df_EN_999625 %>%
   # Participants NOT in the keep criteria above
   filter(!(
     id <= 1124 |
@@ -922,14 +933,14 @@ en_in_new <- df_EN_999625 %>%
 # Update df_EN_999625 to only contain non-Indian English speakers
 df_EN_999625 <- en_keep
 
-# Create EN_IN dataset (Indian English speakers)
-df_EN_IN_999625 <- en_in_new %>%
+# Create in_en dataset (Indian English speakers)
+df_in_en_999625 <- in_en_new %>%
   mutate(
-    id = str_c("EN_IN_999625_", id),
+    id = str_c("IN_EN_999625_", id),
     dataset = "EN_I"    # Mark as English-India
   )
 
-write_processed(df_EN_IN_999625, "EN_IN_999625.sav")
+write_processed(df_in_en_999625, "IN_EN_999625.sav")
 
 # Finalize EN dataset (non-Indian English speakers)
 df_EN_999625 <- df_EN_999625 %>%
@@ -1078,7 +1089,7 @@ write_processed(df_us_oregon, "US_216254.sav")
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # OUTPUT: NL_extra.sav
-df_nl_extra <- read_extra_raw("Dataset NL.sav") %>%
+df_nl_extra <- read_raw("Dataset NL.sav") %>%
   # Create ID with NL prefix
   mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
   
@@ -1107,7 +1118,7 @@ write_processed(df_nl_extra, "NL_extra.sav")
 # OUTPUT: RU_extra.sav
 
 # Load main Russian dataset from SPSS file
-df_ru_extra_main <- read_extra_raw("Dataset_15.08.2022, RU (1).sav") %>%
+df_ru_extra_main <- read_raw("Dataset_15.08.2022, RU (1).sav") %>%
   # Fix data type issues (some columns imported as character, need numeric)
   mutate(
     # Convert submitdate from character to proper datetime format
@@ -1123,7 +1134,7 @@ df_ru_extra_main <- read_extra_raw("Dataset_15.08.2022, RU (1).sav") %>%
   )
 
 # Load supplementary Russian participants from Excel file
-df_ru_extra_second <- read_excel(file.path(DIR_REAL_RAW, "participants_rus.xlsx"))
+df_ru_extra_second <- read_excel(file.path(DIR_RAW, "participants_rus.xlsx"))
 
 # Create IDs for Excel participants (starting from 101 to avoid conflicts)
 df_ru_extra_second$id <- 101:(100 + nrow(df_ru_extra_second))
@@ -1155,7 +1166,7 @@ write_processed(df_ru_extra, "RU_extra.sav")
 # ADMINISTRATION: Printed paper survey (printed=1)
 # NOTE: Uses latin1 encoding (Spanish characters)
 # OUTPUT: AR_extra.sav
-df_ar_extra <- read_sav(file.path(DIR_REAL_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
+df_ar_extra <- read_sav(file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -1191,7 +1202,7 @@ write_processed(df_ar_extra, "AR_extra.sav")
 # SCALE VERSIONS: FTOS_v2, LPS_v2, CAAS_S (special South African CAAS version)
 # NOTE: Other scales were randomly assigned to participants
 # OUTPUT: SA_extra.sav
-df_sa <- read_extra_raw("Dataset SA [full].sav") %>%
+df_sa <- read_raw("Dataset SA [full].sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -1216,7 +1227,7 @@ write_processed(df_sa, "SA_extra.sav")
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # NOTE: Second wave of extra Italian data (vs IT3 from Section 5)
 # OUTPUT: IT_extra.sav
-df_it2 <- read_extra_raw("Dataset IT2.sav") %>%
+df_it2 <- read_raw("Dataset IT2.sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%

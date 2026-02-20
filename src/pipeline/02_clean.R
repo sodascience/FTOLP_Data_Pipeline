@@ -5,7 +5,7 @@
 #          from processed survey data. Ensures only high-quality responses
 #          proceed to final analysis.
 #
-# INPUTS:  Processed .sav files from DIR_PROCESSED (output of 01_split_raw.R)
+# INPUTS:  Processed .sav files from DIR_SPLIT (output of 01_split_raw.R)
 #          - ~40+ country/language-specific datasets
 #          - Each contains raw survey responses with minimal preprocessing
 #
@@ -63,7 +63,7 @@ if (!dir.exists(DIR_CLEAN)) {
 
 # Get list of all processed SPSS files to clean
 file_list <- list.files(
-  path = DIR_PROCESSED,              # Directory containing processed files
+  path = DIR_SPLIT,              # Directory containing processed files
   pattern = "\\.sav$",               # Only .sav files (SPSS format)
   full.names = TRUE                  # Return full paths (not just filenames)
 )

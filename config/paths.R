@@ -2,16 +2,13 @@
 # Modify these paths according to your local setup
 
 # Base project directory
-PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/Narrating the Future (Bogdan)"
+PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/ftolp_data"
 
 # Data directories
-DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
-DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
-DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
-
-# Script directory (for sourcing utilities)
-DIR_SCRIPTS <- file.path(PROJECT_ROOT, "Bogdan R")
+DIR_RAW <- file.path(PROJECT_ROOT, "raw")
+DIR_SPLIT <- file.path(PROJECT_ROOT, "split")
+DIR_CLEAN <- file.path(PROJECT_ROOT, "clean")
+DIR_EXTERNAL <- file.path(PROJECT_ROOT, "external")
 
 # Dataset groupings
 DATASETS <- list(

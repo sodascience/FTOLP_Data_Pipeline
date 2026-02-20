@@ -81,10 +81,9 @@ Before running the pipeline, configure your paths in `config/paths.R`:
 PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/Narrating the Future (Bogdan)"
 
 # Data directories
-DIR_RAW <- file.path(PROJECT_ROOT, "LimeSurvey Raw")
-DIR_REAL_RAW <- file.path(PROJECT_ROOT, "Real Raw Data")
-DIR_PROCESSED <- file.path(PROJECT_ROOT, "LimeSurvey Processed")
-DIR_CLEAN <- file.path(PROJECT_ROOT, "LimeSurvey Processed", "clean")
+DIR_RAW <- file.path(PROJECT_ROOT, "raw")
+DIR_SPLIT <- file.path(PROJECT_ROOT, "split")
+DIR_CLEAN <- file.path(PROJECT_ROOT, "clean")
 ```
 
 Modify `PROJECT_ROOT` to match your local setup.
@@ -160,7 +159,7 @@ source("src/pipeline/03_merge_general.R")
   - `normalize_column_names()`: Standardizes variable names
   - `write_clean()`: Removes all-NA columns before saving
 - **Input**: `.sav` files in `DIR_RAW`
-- **Output**: Processed `.sav` files in `DIR_PROCESSED`
+- **Output**: Processed `.sav` files in `DIR_SPLIT`
 
 #### `02_clean.R`
 - **Function**: Main cleaning pipeline orchestrator

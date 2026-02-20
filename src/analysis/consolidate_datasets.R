@@ -8,7 +8,7 @@ source(here::here("config", "paths.R"))
 
 # Load files from processed directory
 file_list <- list.files(
-  path = DIR_PROCESSED,
+  path = DIR_SPLIT,
   pattern = "\\.sav$",
   full.names = TRUE
 )
