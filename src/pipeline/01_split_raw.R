@@ -1245,7 +1245,6 @@ df_sk_extra <- read_raw("Dataset Slovakia.sav") %>%
 write_processed(df_sk_extra, "SK_extra.sav")
 
 
-
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SERBIA ----
 # SERBIA EXTRA DATASET
@@ -1255,17 +1254,19 @@ write_processed(df_sk_extra, "SK_extra.sav")
 # OUTPUT: RS_extra.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_rs_extra <- read_raw("LP and FTOS raw data Serbia.xlsx") %>%
+df_rs_extra <- read_excel(file.path(DIR_RAW, "LP and FTOS raw data Serbia.xlsx")) %>%
   # Create ID with RS prefix
-  mutate(id = str_c("RS_extra_", id), dataset = "RS") %>%
+  mutate(id = str_c("RS_extra_", row_number()), dataset = "RS") %>%
   
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
+
+  # Rename education_sv to education
+  rename(education = education_sv) %>%
   
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
+  # Standard normalization 
+  normalize_column_names()
 
 write_processed(df_rs_extra, "RS_extra.sav")
 
