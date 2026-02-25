@@ -1,5 +1,5 @@
-# =============================================================================
-# SCRIPT: 01_split_raw.R
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# SCRIPT: 01_split_raw.R -
 # PURPOSE: Load raw LimeSurvey data, preprocess, split by country/language, 
 #          and output to processed directory
 # 
@@ -13,9 +13,9 @@
 #   4. Add unique ID prefixes to track data source
 #   5. Filter out test participants and incomplete responses
 #   6. Save processed files for cleaning pipeline
-# =============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-# Load required packages
+# Load required packages ----
 library(tidyverse)   # Data manipulation and visualization
 library(haven)       # Read/write SPSS .sav files
 library(purrr)       # Functional programming tools
@@ -25,12 +25,13 @@ library(readxl)      # Read Excel files
 library(lubridate)   # Date/time manipulation
 library(here)        # Project-relative paths
 
+# Load configuration file ----
 # Load configuration file containing directory paths (DIR_RAW, DIR_SPLIT)
 source(here::here("config", "paths.R"))
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# HELPER FUNCTIONS ----
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Read SPSS file from main raw data directory
 # Used for files directly exported from LimeSurvey
@@ -62,6 +63,7 @@ write_processed <- function(df, filename) {
   message(sprintf("Saved: %s", output_path))
 }
 
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Normalize and standardize column names across different survey versions
 # This ensures consistency when merging datasets from different countries/languages
 # 
@@ -71,6 +73,7 @@ write_processed <- function(df, filename) {
 #   - Capitalizes demographic variable names (age -> Age, gender -> Gender)
 #   - Standardizes control item names (uppercase X -> lowercase x)
 #   - Filters out test participants (where Ref or Name contains "test")
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 normalize_column_names <- function(df) {
   df %>%
     # Remove redundant double prefixes: "PREFIX_PREFIX##" -> "PREFIX_##"
@@ -124,6 +127,7 @@ normalize_column_names <- function(df) {
     }
 }
 
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Rename LoTeDGI scale items for Brazil pilot dataset
 # The LoTeDGI scale combines two separate scales that need to be split:
 #   - DGI (Dispositional Goal Instrumentality): Odd items (1,3,5,7,9,11,13)
@@ -156,9 +160,8 @@ rename_scales_brazil_pilot <- function(df) {
   df %>% rename(!!!map)
 }
 
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # brazil_pilot_fix_factors: Fix Factor Encoding Issue in Brazil Pilot Data
-# ============================================================================
 # PURPOSE: Corrects improperly encoded factor values in Brazil pilot dataset
 #
 # PROBLEM: Brazil pilot data has values stored as "A1", "A2", "A3" etc instead
@@ -178,7 +181,7 @@ rename_scales_brazil_pilot <- function(df) {
 #   Before: Psy_DGI1 = c("A1", "A2", "A3") with labels 1="Strongly Disagree", 2="Disagree"...
 #   After:  Psy_DGI1 = c(1, 2, 3) with labels 1="A1", 2="A2", 3="A3"
 #           (Note: Text labels change to reflect factor levels, but numeric order preserved)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 brazil_pilot_fix_factors <- function(df) {
   # Find all columns matching scale names (MLQ, CAAS, LOT, DGI, AS)
   # value=TRUE returns column names (not indices)
@@ -241,9 +244,8 @@ brazil_pilot_fix_factors <- function(df) {
     )
 }
 
-# ============================================================================
-# SECTION 1: MOZAMBIQUE DATA PROCESSING
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MOZAMBIQUE ----
 # SOURCE: Three separate second-stage survey batches from Mozambique
 #         - 276893.sav: Online administration
 #         - 429283.sav: Printed (paper) administration
@@ -262,7 +264,7 @@ brazil_pilot_fix_factors <- function(df) {
 # 7. Normalize column names (remove special chars, filter test participants)
 # 8. Remove incomplete responses (lastpage = -1 means never submitted)
 # 9. Write combined output: MZ.sav
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load first batch (online administration)
 df_mz_online <- read_raw("276893.sav") %>%
@@ -307,9 +309,9 @@ df_mz <- bind_rows(df_mz_online, df_mz_printed, df_mz_3) %>%
 # Write combined Mozambique dataset
 write_processed(df_mz, "MZ.sav")
 
-# ============================================================================
-# SECTION 2: MAIN SURVEY 1 (277273.sav) - MULTI-COUNTRY/LANGUAGE SPLITTING
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MAIN SURVEY 1 ----
+# MAIN SURVEY 1 (277273.sav) - MULTI-COUNTRY/LANGUAGE SPLITTING
 # SOURCE: 277273.sav (large multi-language first-stage survey)
 #         Contains participants from: China, Slovenia, Italy, Spain, English-speaking,
 #         Portuguese (both European and Brazilian)
@@ -336,7 +338,7 @@ write_processed(df_mz, "MZ.sav")
 # 4. Split data by language with additional quality filters
 # 5. Handle Portuguese/Brazilian special cases (duplicates, conditions)
 # 6. Output 6 separate country/language files
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load main survey 1 data
 df_main1 <- read_raw("277273.sav")
@@ -368,9 +370,9 @@ df_main1 <- df_main1 %>%
   # Remove incomplete responses
   filter(lastpage != -1)
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # CHINA DETECTION: Identify Chinese participants using multiple criteria
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Define survey items that only appear in Chinese version
 # These indicate participant saw Chinese questionnaire
@@ -421,11 +423,11 @@ china_ids <- df_main1 %>%
   pull(id) %>%
   unique()
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # EXTRACT IDs FOR OTHER LANGUAGE GROUPS (based on startlanguage only)
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-# Slovenia: Slovenian language
+# Slovenia : Slovenian language
 sl_ids <- df_main1 %>%
   filter(startlanguage == "sl") %>%
   pull(id)
@@ -448,9 +450,9 @@ en_ids <- df_main1 %>%
 # Combine all non-Portuguese IDs for later exclusion
 non_ptbr_ids <- unique(c(china_ids, sl_ids, it_ids, es_ids, en_ids))
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # CREATE COUNTRY-SPECIFIC DATASETS WITH QUALITY FILTERS
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # CHINA dataset
 df_main1_china <- df_main1 %>%
@@ -496,9 +498,9 @@ df_en <- df_main1 %>%
   # Mark as "Oth" (Other) since English could be US, UK, India, etc.
   mutate(id = str_c("EN_277273_", id), dataset = "Oth")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PORTUGUESE/BRAZILIAN dataset - Complex handling with duplicate removal
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load list of duplicate IDs to exclude (stored in external file)
 # IDs stored with offset, need to subtract 22200000 to match df_main1 IDs
@@ -530,9 +532,9 @@ df_ptbr <- df_main1 %>%
   # Remove temporary columns from join
   select(-Condition.x, -Condition.y)
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # WRITE ALL 6 COUNTRY/LANGUAGE DATASETS
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 write_processed(df_main1_china, "CH_277273.sav")
 write_processed(df_sl, "SL_277273.sav")
 write_processed(df_it, "IT_277273.sav")
@@ -540,22 +542,11 @@ write_processed(df_es, "ES_277273.sav")
 write_processed(df_en, "EN_277273.sav")
 write_processed(df_ptbr, "PTBR_277273.sav")
 
-# ----------------------------------------------------------------------------
-# DIAGNOSTIC: Nationality frequency table (for data exploration/validation)
-# ----------------------------------------------------------------------------
-frequency_table <- df_main1 %>%
-  # Convert nationality codes to labeled factors (e.g., 35="China")
-  mutate(nationality = as_factor(Nationality)) %>%
-  
-  # Count occurrences of each nationality label
-  count(nationality, sort = TRUE) %>%
-  
-  # Calculate percentage of total
-  mutate(percentage = n / sum(n) * 100)
 
-# ============================================================================
-# SECTION 3: BRAZIL PILOT DATA (569687.sav) - Complex Merge with External Dataset
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# BRAZIL PILOT ----
+# BRAZIL PILOT DATA (569687.sav) - Complex Merge with External Dataset
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SOURCE: Two data sources that need merging:
 #         1. 569687.sav - Raw LimeSurvey export (pilot questionnaire responses)
 #         2. "DataSet BR&PT.sav" - External file with FTOS/LPS scales + demographics
@@ -576,11 +567,9 @@ frequency_table <- df_main1 %>%
 # 7. Filter incomplete responses and write output
 #
 # OUTPUT: br_pilot.sav (merged and processed pilot data)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-# ----------------------------------------------------------------------------
 # LOAD EXTERNAL DATASET: DataSet BR&PT (contains FTOS/LPS pilot scales)
-# ----------------------------------------------------------------------------
 df_dataset_brpt <- read_sav(file.path(DIR_EXTERNAL, "DataSet BR&PT.sav")) %>%
   # Standardize FTOS pilot column names: "FTOS_pilot1" -> "FTOS_pilot_1"
   rename_with(~ str_replace(.x, "^FTOS_pilot(\\d+)$", "FTOS_pilot_\\1")) %>%
@@ -588,9 +577,7 @@ df_dataset_brpt <- read_sav(file.path(DIR_EXTERNAL, "DataSet BR&PT.sav")) %>%
   # Standardize LPS pilot column names: "LPS_pilot1" -> "LPS_pilot_1"
   rename_with(~ str_replace(.x, "^LPS_pilot(\\d+)$", "LPS_pilot_\\1"))
 
-# ----------------------------------------------------------------------------
 # LOAD PILOT SURVEY DATA (569687.sav)
-# ----------------------------------------------------------------------------
 df_brazil_pilot <- read_raw("569687.sav") %>%
   # Offset IDs to avoid conflicts with other datasets (add 11,100,000)
   mutate(id = id + 11100000) %>%
@@ -607,30 +594,23 @@ df_brazil_pilot <- read_raw("569687.sav") %>%
   # Would rename FTOS_SQ001, FTOS_SQ01 columns to FTOS_pilot_ format
   # Not needed because external dataset already has proper names
 
-# ----------------------------------------------------------------------------
 # DEFINE SCALE COLUMNS TO EXTRACT FROM EXTERNAL DATASET
-# ----------------------------------------------------------------------------
 # These are the core scales stored in DataSet BR&PT
 ftos_lps_cols <- c(
   paste0("FTOS_pilot_", 1:15),  # FTOS pilot items 1-15
   paste0("LPS_pilot_", 1:21)    # LPS pilot items 1-21
 )
 
-# ----------------------------------------------------------------------------
 # SELECT RELEVANT COLUMNS FROM EXTERNAL DATASET
-# ----------------------------------------------------------------------------
 # Extract scales + demographic/background variables for merging
 df_dataset_brpt <- df_dataset_brpt %>%
   select(
     # Merge key
     id,
-    
     # Core pilot scales
     all_of(ftos_lps_cols),
-    
     # Identity codes (anonymization)
     starts_with("IdCode_"),
-    
     # Demographics
     Age,
     Sex,
@@ -663,9 +643,7 @@ df_dataset_brpt <- df_dataset_brpt %>%
     starts_with("PsyTreatment")  # Treatment history
   )
 
-# ----------------------------------------------------------------------------
 # MERGE PILOT SURVEY WITH EXTERNAL DATASET
-# ----------------------------------------------------------------------------
 df_brazil_pilot_merged <- df_brazil_pilot %>%
   # Left join: Keep all pilot survey responses, add scales/demographics where available
   left_join(df_dataset_brpt, by = "id") %>%
@@ -702,15 +680,15 @@ df_brazil_pilot_merged <- df_brazil_pilot %>%
 # Write processed Brazil pilot dataset
 write_processed(df_brazil_pilot_merged, "br_pilot.sav")
 
-# ============================================================================
-# SECTION 4: INDIA DATA (824323.sav)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# INDIA ----
+# INDIA DATA (824323.sav)
 # SOURCE: 824323.sav - English language survey in India
 # SURVEY STAGE: Second stage (shorter follow-up questionnaire)
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # LANGUAGE: English
 # OUTPUT: IN_EN_824323.sav
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_india <- read_raw("824323.sav") %>%
   # Create ID with country/language prefix: IN_EN (English-India)
   mutate(id = str_c("IN_EN_824323_", id), dataset = "EN_I") %>%
@@ -729,16 +707,17 @@ df_india <- read_raw("824323.sav") %>%
 
 write_processed(df_india, "IN_EN_824323.sav")
 
-# ============================================================================
-# SECTION 5: ITALY DATA COLLECTION 3 (855796.sav)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ITALY ----
+# ITALY DATA COLLECTION 3 (855796.sav)
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SOURCE: 855796.sav - Italian language survey (third wave)
 # SURVEY STAGE: Second stage (shorter follow-up questionnaire)
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # LANGUAGE: Italian
 # NOTE: Third data collection wave for Italy (vs first wave in Section 2)
 # OUTPUT: IT_855796.sav
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_it3 <- read_raw("855796.sav") %>%
   # Create ID with country prefix, mark as data collection wave 3
   mutate(id = str_c("IT_855796_", id), strategy = "data collection 3", dataset = "IT") %>%
@@ -758,16 +737,16 @@ df_it3 <- read_raw("855796.sav") %>%
 write_processed(df_it3, "IT_855796.sav")
 
 
-# ============================================================================
-# SECTION 6: USA DATA COLLECTION 1 (868141.sav)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# USA ----
+# USA DATA COLLECTION 1 (868141.sav)
 # SOURCE: 868141.sav - English language survey in USA
 # SURVEY STAGE: First stage (full questionnaire)
 # SCALE VERSIONS: FTOS_v1, LPS_v1
 # LANGUAGE: English
 # NOTE: Second wave of US data collection (vs Oregon = first wave)
 # OUTPUT: US_868141.sav
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_us1 <- read_raw("868141.sav") %>%
   # Create ID with country prefix, mark as data collection wave 2
   mutate(id = str_c("US_868141_", id), strategy = "data collection 2", dataset = "US") %>%
@@ -786,9 +765,9 @@ df_us1 <- read_raw("868141.sav") %>%
 
 write_processed(df_us1, "US_868141.sav")
 
-# ============================================================================
-# SECTION 7: MAIN SURVEY 2 (999625.sav) - Complex English/Hindi Splitting
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MAIN SURVEY 2 ----
+# MAIN SURVEY 2 (999625.sav) - Complex English/Hindi Splitting
 # SOURCE: 999625.sav - Multi-language second-stage survey
 # SURVEY STAGE: Second stage (shorter follow-up questionnaire)
 # SCALE VERSIONS: FTOS_v2, LPS_v2
@@ -809,7 +788,7 @@ write_processed(df_us1, "US_868141.sav")
 #   - IN_EN_999625.sav (English, Indian participants)
 #   - IN_999625.sav (Hindi, Indian participants)
 #   - Multiple country-specific files (MX, RU, AR, CH, IT, NL, etc.)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load and prepare main survey 2 data
 df_main_2 <- read_raw("999625.sav") %>%
@@ -827,9 +806,9 @@ df_main_2 <- read_raw("999625.sav") %>%
   # Apply standard column name normalization
   normalize_column_names()
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 1: Initial split by language (English vs Hindi)
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # English language participants (initial assignment)
 df_EN_999625 <- df_main_2 %>%
@@ -839,9 +818,9 @@ df_EN_999625 <- df_main_2 %>%
 df_IN_99625 <- df_main_2 %>%
   filter(startlanguage == "hi")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 2: Move EN participants with "Caste" data to IN dataset
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # REASONING: "Caste" is India-specific demographic field
 #            If filled out, participant is Indian regardless of language selection
 
@@ -862,9 +841,9 @@ df_EN_999625 <- df_EN_999625 %>%
 # Add them to IN dataset
 df_IN_99625 <- bind_rows(df_IN_99625, en_with_Caste)
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 3: Move IN participants with FTOS but no Caste to EN dataset
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # REASONING: If they answered FTOS (main scale) but not Caste (India-specific),
 #            they likely are not Indian despite selecting Hindi language
 
@@ -893,9 +872,9 @@ df_IN_99625 <- df_IN_99625 %>%
 # Add to EN dataset
 df_EN_999625 <- bind_rows(df_EN_999625, in_with_ftos_no_Caste)
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 4: Further split EN into EN (non-Indian) and IN_EN (Indian English speakers)
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Remove problematic participant ID 3729 (data quality issue)
 df_EN_999625 <- df_EN_999625 %>%
@@ -960,9 +939,9 @@ df_IN_99625 <- df_IN_99625 %>%
 
 write_processed(df_IN_99625, "IN_999625.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 5: Process remaining languages from Main Survey 2
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # LANGUAGES: Spanish (Mexico), Portuguese (Brazil), Chinese, Italian, Dutch,
 #            Arabic, Indonesian, Malay, Russian, Turkish
 # STRATEGY: Group by language/country, apply country-specific filters, output separately
@@ -1030,16 +1009,16 @@ df_main2_other <- df_main_2 %>%
     write_processed(.x, glue::glue("{this_country}_999625.sav"))
   })
 
-# ============================================================================
-# SECTION 8: USA OREGON DATA (216254.sav)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# USA OREGON ----
+# USA OREGON DATA (216254.sav)
 # SOURCE: 216254.sav - English language survey from University of Oregon
 # SURVEY STAGE: First stage (full questionnaire)
 # SCALE VERSIONS: FTOS_v1, LPS_v1
 # LANGUAGE: English
 # NOTE: First wave of US data collection (vs 868141 = second wave)
 # OUTPUT: US_216254.sav
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_us_oregon <- read_raw("216254.sav") %>%
   # Create ID with country prefix, mark as data collection wave 1
   mutate(id = str_c("US_216254_", id), strategy = "data collection 1", dataset = "US") %>%
@@ -1058,18 +1037,19 @@ df_us_oregon <- read_raw("216254.sav") %>%
 
 write_processed(df_us_oregon, "US_216254.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # NOTE: Combined US dataset creation (US_all.sav) is commented out
 # This would merge all US waves together, but is not currently used in pipeline
 # US datasets remain separate by wave for now
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # df_us <- bind_rows(df_us1, df_us_oregon)
 # write_processed(df_us, "US_all.sav")
 
-# ============================================================================
-# SECTION 9: EXTRA DATASETS (from Real Raw Data directory)
-# ============================================================================
-# SOURCE: Various manually curated datasets from "Real Raw Data" directory
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# EXTRA DATASETS
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# SOURCE: Various manually curated datasets provided by collaborators
 #         These are datasets collected separately or received after main surveys
 #
 # INCLUDED COUNTRIES:
@@ -1078,17 +1058,23 @@ write_processed(df_us_oregon, "US_216254.sav")
 #   - Argentina (AR): Printed paper survey
 #   - South Africa (SA): Full dataset with special CAAS scale
 #   - Italy (IT2): Second data collection wave
+#   - Russia (RU2): Extra dataset from second data collection wave
+#   - Slovakia (SK): Full dataset with special SK-specific scale
+#.  - Serbia (SR): Full dataset with special SR-specific scale
 #
 # NOTE: These datasets have varied formats and require special handling
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-# ----------------------------------------------------------------------------
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# NETHERLANDS ----
 # NETHERLANDS EXTRA DATASET
-# ----------------------------------------------------------------------------
 # SOURCE: "Dataset NL.sav" (manually provided Dutch dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # OUTPUT: NL_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
 df_nl_extra <- read_raw("Dataset NL.sav") %>%
   # Create ID with NL prefix
   mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
@@ -1107,15 +1093,16 @@ df_nl_extra <- read_raw("Dataset NL.sav") %>%
 
 write_processed(df_nl_extra, "NL_extra.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# RUSSIA ----
 # RUSSIA EXTRA DATASET - Complex two-source merge
-# ----------------------------------------------------------------------------
 # SOURCE: Two data files that need merging:
 #         1. "Dataset_15.08.2022, RU (1).sav" - Main SPSS dataset
 #         2. "participants_rus.xlsx" - Excel supplement with additional participants
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # OUTPUT: RU_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load main Russian dataset from SPSS file
 df_ru_extra_main <- read_raw("Dataset_15.08.2022, RU (1).sav") %>%
@@ -1157,15 +1144,17 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
 
 write_processed(df_ru_extra, "RU_extra.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ARGENTINA ----
 # ARGENTINA EXTRA DATASET
-# ----------------------------------------------------------------------------
 # SOURCE: "Dataset AR.sav 16.4.2023.sav" (manually provided Argentine dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # ADMINISTRATION: Printed paper survey (printed=1)
 # NOTE: Uses latin1 encoding (Spanish characters)
 # OUTPUT: AR_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
 df_ar_extra <- read_sav(file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -1194,14 +1183,16 @@ df_ar_extra <- df_ar_extra %>%
 
 write_processed(df_ar_extra, "AR_extra.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# SOUTH AFRICA ----
 # SOUTH AFRICA DATASET
-# ----------------------------------------------------------------------------
 # SOURCE: "Dataset SA [full].sav" (South African full dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2, CAAS_S (special South African CAAS version)
 # NOTE: Other scales were randomly assigned to participants
 # OUTPUT: SA_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
 df_sa <- read_raw("Dataset SA [full].sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -1219,9 +1210,10 @@ df_sa <- read_raw("Dataset SA [full].sav") %>%
 
 write_processed(df_sa, "SA_extra.sav")
 
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ITALY EXTRA ----
 # ITALY EXTRA DATASET (Second Wave)
-# ----------------------------------------------------------------------------
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SOURCE: "Dataset IT2.sav" (second Italian data collection wave)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
@@ -1240,11 +1232,96 @@ df_it2 <- read_raw("Dataset IT2.sav") %>%
 
 write_processed(df_it2, "IT_extra.sav")
 
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# RUSSIA EXTRA 2 ----
+# RUSSIA EXTRA DATASET
+# SOURCE: "RU_extra2.sav" (manually provided Russian dataset)
+# SURVEY STAGE: Second stage
+# SCALE VERSIONS: FTOS_v2, LPS_v2
+# OUTPUT: RU_extra2.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+df_ru_extra2 <- read_raw("RU_extra2.sav") %>%
+  # Create ID with NL prefix
+  mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
+  
+  # Standardize to version 2 scale names
+  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
+  
+  # Fix LPS goals column naming
+  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
+  
+  # Standard normalization and filter incomplete
+  normalize_column_names() %>%
+  filter(lastpage != -1)
+
+write_processed(df_nl_extra, "NL_extra.sav")
+
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# SLOVAKIA ----
+# SLOVAKIA EXTRA DATASET
+# SOURCE: "Dataset Slovakia.sav" (manually provided Slovak dataset)
+# SURVEY STAGE: Second stage
+# SCALE VERSIONS: FTOS_v2, LPS_v2
+# OUTPUT: SK_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+df_sk_extra <- read_raw("Dataset Slovakia.sav") %>%
+  # Create ID with SK prefix
+  mutate(id = str_c("SK_extra_", id), dataset = "SK") %>%
+  
+  # Standardize to version 2 scale names
+  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
+  
+  # Fix LPS goals column naming
+  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
+  
+  # Standard normalization and filter incomplete
+  normalize_column_names() %>%
+  filter(lastpage != -1)
+
+write_processed(df_sk_extra, "SK_extra.sav")
+
+
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# SERBIA ----
+# SERBIA EXTRA DATASET
+# SOURCE: "LP and FTOS raw data Serbia.xlsx" (manually provided Serbian dataset)
+# SURVEY STAGE: Second stage
+# SCALE VERSIONS: FTOS_v2, LPS_v2
+# OUTPUT: RS_extra.sav
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+df_rs_extra <- read_raw("LP and FTOS raw data Serbia.xlsx") %>%
+  # Create ID with RS prefix
+  mutate(id = str_c("RS_extra_", id), dataset = "RS") %>%
+  
+  # Standardize to version 2 scale names
+  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
+  
+  # Fix LPS goals column naming
+  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
+  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
+  
+  # Standard normalization and filter incomplete
+  normalize_column_names() %>%
+  filter(lastpage != -1)
+
+write_processed(df_rs_extra, "RS_extra.sav")
+
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # END OF 01_split_raw.R
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SUMMARY: This script has processed ~20 raw survey files and split them into
 #          ~40+ country/language-specific processed files, ready for cleaning.
 #
 # NEXT STEP: Run 02_clean.R to apply quality filters to processed datasets
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
