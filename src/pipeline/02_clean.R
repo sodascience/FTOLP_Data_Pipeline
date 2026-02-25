@@ -1,6 +1,6 @@
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # 02_clean.R - DATA QUALITY FILTERING PIPELINE
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PURPOSE: Apply systematic quality control filters to remove invalid responses
 #          from processed survey data. Ensures only high-quality responses
 #          proceed to final analysis.
@@ -10,8 +10,7 @@
 #          - Each contains raw survey responses with minimal preprocessing
 #
 # OUTPUTS: Cleaned .sav files written to DIR_CLEAN
-#          - [dataset]_clean.sav - Standard cleaned version
-#          - [dataset]_clean_more_filters.sav - US datasets with additional filters
+#          - [dataset]_clean.sav
 #          - clean_summary.xlsx - Audit trail showing how many responses removed at each step
 #
 # CLEANING STEPS (8 quality filters applied):
@@ -34,8 +33,11 @@
 #   - Rows removed at each cleaning step
 #   - Final N after all filters
 #   - Percentage retained
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Preparation ----
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Load required libraries
 library(tidyverse)
 library(haven)
@@ -50,30 +52,9 @@ library(here)
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
 
-# ============================================================================
-# SETUP: Prepare output directory and load input files
-# ============================================================================
-
-# Create clean output directory if it doesn't exist
-# recursive=TRUE ensures parent directories are created if needed
-if (!dir.exists(DIR_CLEAN)) {
-  dir.create(DIR_CLEAN, recursive = TRUE)
-  message("Created directory: ", DIR_CLEAN)
-}
-
-# Get list of all processed SPSS files to clean
-file_list <- list.files(
-  path = DIR_SPLIT,              # Directory containing processed files
-  pattern = "\\.sav$",               # Only .sav files (SPSS format)
-  full.names = TRUE                  # Return full paths (not just filenames)
-)
-
-# ============================================================================
 # DATASET GROUPINGS: Define which datasets get which filters
-# ============================================================================
 # These groupings are loaded from config/paths.R
 # They allow applying different filters to different subsets of data
-
 br_pt <- DATASETS$br_pt                    # Brazil & Portugal datasets
 ch <- DATASETS$ch                          # China datasets
 us <- DATASETS$us                          # USA datasets
@@ -83,9 +64,18 @@ first_stage <- DATASETS$first_stage        # All first-stage surveys
 first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
 first_stage_ch <- DATASETS$first_stage_ch  # China first-stage
 
-# ============================================================================
-# CLEANING STEP 1: MISSING RESPONSE FILTER
-# ============================================================================
+# Get list of all split SPSS files to clean including files in subfolders
+file_list <- list.files(
+  path = DIR_SPLIT,              # Directory containing processed files
+  pattern = "\\.sav$",               # Only .sav files (SPSS format)
+  full.names = TRUE,                  # Return full paths (not just filenames)
+  recursive = TRUE                   # Include subdirectories
+)
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MISSING RESPONSE FILTER ----
 # PURPOSE: Remove participants who didn't answer core scales
 # RATIONALE: Can't calculate scale scores without complete data
 #
@@ -97,8 +87,8 @@ first_stage_ch <- DATASETS$first_stage_ch  # China first-stage
 #
 # NOTE: Different datasets use different scale versions (v1, v2, pilot)
 #       so need separate checks for each
-# ============================================================================
-step_1 <- mk_group("Missing response",
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+filter_na <- mk_group("Missing response",
   steps = list(
     # Check 1: First-stage FTOS (FTOS_v1)
     # Skip Brazil/Portugal (they use different scale combination)
@@ -133,9 +123,8 @@ step_1 <- mk_group("Missing response",
   )
 )
 
-# ============================================================================
-# CLEANING STEP 2: CONSTANT ANSWER FILTER
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# CONSTANT ANSWER FILTER ----
 # PURPOSE: Remove participants who gave the same answer to all items in a scale
 # RATIONALE: Indicates participant wasn't reading questions (satisficing behavior)
 #
@@ -146,7 +135,7 @@ step_1 <- mk_group("Missing response",
 #   - Country-specific: IPIP (BR/PT), LS (China), MLQ (BR/PT/CH/US), AS (BR/PT/CH/US), GRIT (US)
 #
 # NOTE: Different datasets have different scales, so filters are targeted
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 constant_and_binary <- mk_group(
   "Drop rows with constant responses",
   steps = list(
@@ -211,9 +200,8 @@ constant_and_binary <- mk_group(
   )
 )
 
-# ============================================================================
-# CLEANING STEP 3: ATTENTION CHECK FILTER
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ATTENTION CHECK FILTER ----
 # PURPOSE: Remove participants who failed attention control items
 # RATIONALE: Attention checks verify participants are reading questions carefully
 #
@@ -225,7 +213,7 @@ constant_and_binary <- mk_group(
 #
 # MECHANISM: Each scale has a column like "FTOS_x" marking failed attention check
 #            step_check_control() removes rows where this column indicates failure
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 check_attention <- mk_group(
   "Check attention control items",
   steps = list(
@@ -243,9 +231,8 @@ check_attention <- mk_group(
   )
 )
 
-# ============================================================================
-# CLEANING STEP 4: ZIGZAG PATTERN FILTER
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ZIGZAG PATTERN FILTER ----
 # PURPOSE: Remove participants with alternating response patterns
 # RATIONALE: Pattern like 1-7-1-7-1-7 or 2-6-2-6 indicates random/careless responding
 #
@@ -261,13 +248,12 @@ check_attention <- mk_group(
 #   - US: MLQ, AS, GRIT
 #   - Slovenia: DASS
 #   - Italy: IT_IT, DMF
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
 remove_zigzag <- mk_group(
   "Remove zigzag answers",
   steps = list(
-    # -------------------------------------------------------------------------
     # Core scales - All first-stage datasets
-    # -------------------------------------------------------------------------
     mk_step(
       "FTOS1",
       step_detect_zigzag(col_pattern = "^FTOS_v1_\\d+$"),   # First-stage FTOS
@@ -292,9 +278,7 @@ remove_zigzag <- mk_group(
       datasets = c("IT_extra")                              # Italian extra only
     ),
 
-    # -------------------------------------------------------------------------
     # Multi-country scales (BR/PT, US, China)
-    # -------------------------------------------------------------------------
     mk_step(
       "MLQ",
       step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
@@ -307,18 +291,14 @@ remove_zigzag <- mk_group(
       datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_extra")  # BR/PT + US + CH + IT
     ),
 
-    # -------------------------------------------------------------------------
     # Brazil/Portugal specific scales
-    # -------------------------------------------------------------------------
     mk_step(
       "IPIP",
       step_detect_zigzag(col_pattern = "^IPIP_\\d+$"),      # Big Five personality (BR/PT only)
       datasets = first_stage_br_pt
     ),
 
-    # -------------------------------------------------------------------------
     # China specific scales
-    # -------------------------------------------------------------------------
     mk_step(
       "CAAS",
       step_detect_zigzag(col_pattern = "^CAAS_\\d+$"),      # Career Adapt-Abilities Scale (complete version)
@@ -337,27 +317,21 @@ remove_zigzag <- mk_group(
       datasets = first_stage_ch
     ),
 
-    # -------------------------------------------------------------------------
     # US specific scale
-    # -------------------------------------------------------------------------
     mk_step(
       "GRIT",
       step_detect_zigzag(col_pattern = "^GRIT_\\d+$"),      # Grit Scale (perseverance)
       datasets = us
     ),
 
-    # -------------------------------------------------------------------------
     # Slovenia specific scale
-    # -------------------------------------------------------------------------
     mk_step(
       "DASS",
       step_detect_zigzag(col_pattern = "^DASS_\\d+$"),      # Depression Anxiety Stress Scales
       datasets = c("SL_277273")                             # Slovenia only
     ),
 
-    # -------------------------------------------------------------------------
     # Italy specific scales
-    # -------------------------------------------------------------------------
     mk_step(
       "IT",
       step_detect_zigzag(col_pattern = "^IT_\\d+$"),        # Italian Time Perspective scale
@@ -372,12 +346,10 @@ remove_zigzag <- mk_group(
   )
 )
 
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SCALE PATTERNS: Define regex patterns for all scales
-# ============================================================================
 # Used by Mahalanobis and Guttman filters to identify scale columns
 # Each pattern matches all items of a particular scale
-# ============================================================================
 scale_patterns_list <- list(
   FTOS = "^FTOS_v1_\\d+$",           # First-stage FTOS items
   FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS items
@@ -401,9 +373,8 @@ scale_patterns_list <- list(
   LOT = "^Psy_LOT\\d+$"              # LOT scale (Life Orientation Test)
 )
 
-# ============================================================================
-# CLEANING STEPS 5 & 6: MAHALANOBIS DISTANCE & GUTTMAN ERROR FILTERS
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MAHALANOBIS DISTANCE & GUTTMAN ERROR FILTERS ----
 # PURPOSE: Remove statistical outliers and inconsistent response patterns
 #
 # MAHALANOBIS DISTANCE:
@@ -417,7 +388,7 @@ scale_patterns_list <- list(
 #   - Example: Agreeing with hard items but disagreeing with easy items
 #
 # APPLICATION: Only applied to first-stage surveys (most comprehensive data)
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 mahalanobis_guttman <- mk_group("Mahalanobis/Guttman", steps = list(
   mk_step(
     "Mahalanobis",
@@ -432,56 +403,43 @@ mahalanobis_guttman <- mk_group("Mahalanobis/Guttman", steps = list(
   )
 ))
 
-# ============================================================================
-# ASSEMBLE COMPLETE CLEANING PIPELINE
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# ASSEMBLE COMPLETE CLEANING PIPELINE ----
 # Combines all cleaning steps in execution order
 # Some steps are dataset-specific, handled by the pipeline framework
-# ============================================================================
 steps <- list(
-  # Step 1: Missing response filter
-  step_1,
-  
-  # Step 2: Short duration filter (<10 minutes for China/US datasets)
+  # Missing response filter
+  filter_na,
+
+  # Constant and binary pattern filter
+  constant_and_binary,
+
+  # Attention check filter
+  # and short duration filter (<10 minutes for China/US datasets)
+  check_attention,
   list(
     name = "Drop short submitted responses (<10 min)",
     fn = step_filter_min_duration(),
     datasets = ch_us_10_min                      # Only CH/US datasets with time concern
   ),
   
-  # Step 3: Constant answer filter (removed - see commented example below)
-  # list(
-  #  name = "Remove foreigners",
-  #  fn = step_remove_foreigners(),
-  #  datasets = us
-  # ),
-  
-  # Step 4: Age filter (removed - applied separately later for US)
-  # mk_step(name = "Remove > 65", step_filter_age(), datasets = us),
-  
-  # Step 5: Constant and binary pattern filter
-  constant_and_binary,
-  
-  # Step 6: Zigzag pattern filter
+  # Zigzag pattern filter
   remove_zigzag,
   
-  # Step 7 & 8: Statistical outlier detection
-  mahalanobis_guttman,
-  
-  # Step 9: Attention check filter
-  check_attention
+  # Statistical outlier detection
+  mahalanobis_guttman
 )
 
-# ============================================================================
-# MAIN PROCESSING LOOP: Apply cleaning pipeline to all datasets
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# MAIN PROCESSING LOOP ----
+# Apply cleaning pipeline to all datasets
 # For each processed file:
 #   1. Load data
 #   2. Run cleaning pipeline (applies applicable filters)
 #   3. Build audit trail summary
 #   4. Write cleaned file to DIR_CLEAN
 #   5. Keep summary for final report
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Initialize storage for all summaries
 all_summaries <- list()
@@ -537,90 +495,23 @@ for (f in file_list) {
   )
 }
 
-# ============================================================================
-# CREATE SUMMARY REPORT
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# CREATE SUMMARY REPORT ----
 # Combine all individual dataset summaries into one Excel file
 # Shows initial N, final N, and removals at each step for every dataset
-# ============================================================================
 summary_all <- bind_rows(all_summaries)
-write_xlsx(summary_all, "clean_summary.xlsx")
+write_xlsx(summary_all, file.path(DIR_CLEAN, "clean_summary.xlsx"))
 message("Cleaning summary saved to: clean_summary.xlsx")
 
-# ============================================================================
-# US-SPECIFIC ADDITIONAL FILTERING
-# ============================================================================
-# PURPOSE: Create more restrictive versions of US datasets with additional filters
-# RATIONALE: US datasets may require stricter inclusion criteria for some analyses
-#
-# ADDITIONAL FILTERS:
-#   1. Remove foreigners: Exclude non-US nationals (for US-specific analyses)
-#   2. Remove >65 years old: Exclude older adults (if targeting emerging/young adults)
-#
-# OUTPUT: [dataset]_clean_more_filters.sav (in addition to standard _clean.sav)
-#
-# NOTE: These filters are NOT applied to standard cleaned files, only to
-#       "more_filters" versions. This preserves flexibility for different analyses.
-# ============================================================================
 
-# Define additional filter steps (US-specific)
-us_additional_filters <- list(
-  list(
-    name = "Remove foreigners",
-    fn = step_remove_foreigners(),         # Remove participants with non-US nationality
-    datasets = us
-  ),
-  mk_step(
-    name = "Remove > 65", 
-    step_filter_age(),                     # Remove participants older than 65
-    datasets = us
-  )
-)
-
-# Apply additional filters to all US datasets
-for (dataset_name in us) {
-  tryCatch(
-    {
-      # Check if standard cleaned file exists
-      clean_file <- file.path(DIR_CLEAN, paste0(dataset_name, "_clean.sav"))
-      
-      if (file.exists(clean_file)) {
-        # Load the already-cleaned file
-        df_clean <- read_sav(clean_file)
-
-        # Apply additional US-specific filters
-        # This creates a more restrictive subset
-        res_more <- run_cleaning_pipeline(df_clean, dataset_name, us_additional_filters)
-        df_more_filtered <- res_more$df_clean
-
-        # Save with "_clean_more_filters" suffix
-        # This preserves both versions for different analysis needs
-        more_filters_file <- file.path(DIR_CLEAN, paste0(dataset_name, "_clean_more_filters.sav"))
-        write_sav(df_more_filtered, more_filters_file)
-        
-        message("Created ", dataset_name, "_clean_more_filters.sav")
-      } else {
-        # Skip if standard cleaned file doesn't exist
-        message("Clean file not found for ", dataset_name)
-      }
-    },
-    error = function(e) {
-      # Print error but continue with next US dataset
-      message("Error while creating more filtered version for ", dataset_name, ": ", conditionMessage(e))
-    }
-  )
-}
-
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # END OF 02_clean.R
-# ============================================================================
 # SUMMARY: This script has applied 8+ quality filters to ~40 datasets,
 #          removing invalid responses while preserving audit trail.
 #
 # OUTPUTS CREATED:
-#   - ~40 [dataset]_clean.sav files (standard cleaning)
-#   - Multiple [dataset]_clean_more_filters.sav files (US datasets with extra filters)
+#   - ~40 [dataset]_clean.sav files
 #   - clean_summary.xlsx (comprehensive audit trail)
 #
 # NEXT STEP: Run 03_merge_general.R to combine all cleaned datasets
-# ============================================================================
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
