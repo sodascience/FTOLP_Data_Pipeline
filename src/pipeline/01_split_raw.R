@@ -124,11 +124,11 @@ normalize_column_names <- function(df) {
         result <- result %>% filter(is.na(Name) | !str_detect(tolower(Name), "^test$"))
       }
       result
-    }
+    } %>%
 
     # Fix LPS goals column naming
     rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-    rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
+    rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1"))
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1117,11 +1117,15 @@ write_processed(df_ru_extra, "RU_extra.sav")
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # ADMINISTRATION: Printed paper survey (printed=1)
-# NOTE: Uses UTF-8 encoding (for Arabic characters)
+# NOTE: Uses Windows-1256 encoding (Arabic Windows codepage) with user_na flag
 # OUTPUT: IL_AR_extra.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_il_ar_extra <- read_sav(file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "UTF-8") %>%
+df_il_ar_extra <- read_sav(
+  file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), 
+  encoding = "windows-1256",
+  user_na = TRUE
+) %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -1238,9 +1242,8 @@ df_sk_extra <- read_raw("Dataset Slovakia.sav") %>%
   rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
   rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
   
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
+  # Standard normalization
+  normalize_column_names()
 
 write_processed(df_sk_extra, "SK_extra.sav")
 
@@ -1262,8 +1265,8 @@ df_rs_extra <- read_excel(file.path(DIR_RAW, "LP and FTOS raw data Serbia.xlsx")
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
 
-  # Rename education_sv to education
-  rename(education = education_sv) %>%
+  # Rename education_sv to education and Time stamp to timestamp
+  rename(education = education_sv, timestamp = `Time stamp`) %>%
   
   # Standard normalization 
   normalize_column_names()
