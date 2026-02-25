@@ -125,6 +125,10 @@ normalize_column_names <- function(df) {
       }
       result
     }
+
+    # Fix LPS goals column naming
+    rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
+    rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -294,12 +298,6 @@ df_mz <- bind_rows(df_mz_online, df_mz_printed, df_mz_3) %>%
   # Rename LPS columns: "LPS_1" -> "LPS_v2_1" (mark as version 2)
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   
-  # Fix LPS goals columns: "LPSgoals_goal1_" -> "LPSgoal1_" (remove redundant "goals")
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  
-  # Fix alternate LPS goals format: "LPSgoals1_" -> "LPSgoal1_"
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
-  
   # Apply standard column name normalization and remove test participants
   normalize_column_names() %>%
   
@@ -329,7 +327,7 @@ write_processed(df_mz, "MZ.sav")
 #           3. IT (Italy) - Italian language
 #           4. ES (Spain) - Spanish language
 #           5. EN (English) - English language
-#           6. PTBR (Brazil) - Portuguese, excluding all above + duplicate removal
+#           6. BR_PT (Brazil) - Portuguese, excluding all above + duplicate removal
 #
 # PROCESSING STRATEGY:
 # 1. Load and standardize column names for first-stage scales
@@ -356,10 +354,6 @@ df_main1 <- df_main1 %>%
   
   # Fix duplicate prefix: "LPS_LPS1" -> "LPS_v1_1"
   rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
-  
-  # Fix LPS goals columns (same as Mozambique)
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Apply standard normalization (column names + remove test participants)
   normalize_column_names() %>%
@@ -448,7 +442,7 @@ en_ids <- df_main1 %>%
   pull(id)
 
 # Combine all non-Portuguese IDs for later exclusion
-non_ptbr_ids <- unique(c(china_ids, sl_ids, it_ids, es_ids, en_ids))
+non_br_pt_ids <- unique(c(china_ids, sl_ids, it_ids, es_ids, en_ids))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # CREATE COUNTRY-SPECIFIC DATASETS WITH QUALITY FILTERS
@@ -504,26 +498,26 @@ df_en <- df_main1 %>%
 
 # Load list of duplicate IDs to exclude (stored in external file)
 # IDs stored with offset, need to subtract 22200000 to match df_main1 IDs
-df_ptbr_duplicate_ids <- read_sav(file.path(DIR_EXTERNAL, "duplicates_PT&BR.sav")) %>%
+df_br_pt_duplicate_ids <- read_sav(file.path(DIR_EXTERNAL, "duplicates_PT&BR.sav")) %>%
   mutate(id = id - 22200000) %>%
   pull(id)
 
 # Load experimental condition assignments (for merging additional metadata)
-df_ptbr_conditions <- read_sav(file.path(DIR_EXTERNAL, "conditions.sav"))
+df_br_pt_conditions <- read_sav(file.path(DIR_EXTERNAL, "conditions.sav"))
 
 # PORTUGUESE/BRAZILIAN dataset (default: all remaining participants)
-df_ptbr <- df_main1 %>%
+df_br_pt <- df_main1 %>%
   # Exclude anyone already assigned to other language/country + known duplicates
-  filter(!(id %in% non_ptbr_ids | id %in% df_ptbr_duplicate_ids)) %>%
+  filter(!(id %in% non_br_pt_ids | id %in% df_br_pt_duplicate_ids)) %>%
   
   # ID filter: Only include IDs < 9971 (specific batch cutoff)
   filter(id < 9971) %>%
   
-  # Create new ID with PTBR prefix and mark dataset
-  mutate(id = str_c("PTBR_277273_", id), dataset = "PTBR") %>%
+  # Create new ID with BR_PT prefix and mark dataset
+  mutate(id = str_c("BR_PT_277273_", id), dataset = "BR_PT") %>%
   
   # Merge experimental condition data (left join preserves all rows)
-  left_join(df_ptbr_conditions %>% select(id, Condition), by = "id") %>%
+  left_join(df_br_pt_conditions %>% select(id, Condition), by = "id") %>%
   
   # Resolve condition conflicts: prioritize conditions.sav value if present
   # (Condition.y from conditions.sav, Condition.x from df_main1)
@@ -540,7 +534,7 @@ write_processed(df_sl, "SL_277273.sav")
 write_processed(df_it, "IT_277273.sav")
 write_processed(df_es, "ES_277273.sav")
 write_processed(df_en, "EN_277273.sav")
-write_processed(df_ptbr, "PTBR_277273.sav")
+write_processed(df_br_pt, "BR_PT_277273.sav")
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -691,15 +685,11 @@ write_processed(df_brazil_pilot_merged, "br_pilot.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_india <- read_raw("824323.sav") %>%
   # Create ID with country/language prefix: IN_EN (English-India)
-  mutate(id = str_c("IN_EN_824323_", id), dataset = "EN_I") %>%
+  mutate(id = str_c("IN_EN_824323_", id), dataset = "IN_EN") %>%
   
   # Standardize to version 2 scale names (second stage)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Fix LPS goals column naming (same as other datasets)
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
@@ -726,10 +716,6 @@ df_it3 <- read_raw("855796.sav") %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
-  
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
   filter(lastpage != -1)
@@ -754,10 +740,6 @@ df_us1 <- read_raw("868141.sav") %>%
   # Fix duplicate prefix in scale names: "FTOS_FTOS1" -> "FTOS_v1_1"
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
-  
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
@@ -798,10 +780,6 @@ df_main_2 <- read_raw("999625.sav") %>%
   # Standardize to version 2 scale names (second stage)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Apply standard column name normalization
   normalize_column_names()
@@ -916,7 +894,7 @@ df_EN_999625 <- en_keep
 df_in_en_999625 <- in_en_new %>%
   mutate(
     id = str_c("IN_EN_999625_", id),
-    dataset = "EN_I"    # Mark as English-India
+    dataset = "IN_EN"    # Mark as English-India
   )
 
 write_processed(df_in_en_999625, "IN_EN_999625.sav")
@@ -954,27 +932,27 @@ df_main2_other <- df_main_2 %>%
   mutate(
     country = case_when(
       startlanguage == "es-MX" ~ "MX",        # Spanish (Mexico)
-      startlanguage == "pt-BR" ~ "PTBR",      # Portuguese (Brazil)
+      startlanguage == "pt-BR" ~ "BR_PT",      # Portuguese (Brazil)
       startlanguage %in% c("zh-Hans", "zh-Hant-HK") ~ "CH",  # Chinese (both variants)
       TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, AR, etc.)
     ),
     
     # Assign dataset category codes (for later merging logic)
     dataset = case_when(
-      country == "AR" ~ "PS_IS",     # Argentina -> Palestinian/Israeli Studies
+      country == "AR" ~ "IS_AR",     # Arabic -> Palestinian/Israeli Studies
       country == "ID" ~ "ID",        # Indonesia
       country == "MS" ~ "MS",        # Malay
       country == "MX" ~ "MX",        # Mexico
       country == "RU" ~ "RU",        # Russia
       country == "TR" ~ "TK",        # Turkey (using TK code)
       country == "CH" ~ "Oth",       # China -> Other
-      country == "PTBR" ~ "Oth",     # Brazil -> Other
+      country == "BR_PT" ~ "Oth",     # Brazil -> Other
       country == "IT" ~ "Oth",       # Italy -> Other
       country == "NL" ~ "Oth",       # Netherlands -> Other
       TRUE ~ NA_character_
     ),
     
-    # Mark printed administration for Argentina only
+    # Mark printed administration for Israel only
     printed = if_else(country == "AR", 0, NA_real_)
   ) %>%
   
@@ -1027,10 +1005,6 @@ df_us_oregon <- read_raw("216254.sav") %>%
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
   
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
-  
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
   filter(lastpage != -1)
@@ -1055,7 +1029,7 @@ write_processed(df_us_oregon, "US_216254.sav")
 # INCLUDED COUNTRIES:
 #   - Netherlands (NL): Extra second-stage data
 #   - Russia (RU): Two-source merge (main + Excel supplement)
-#   - Argentina (AR): Printed paper survey
+#   - Israel (IL): Printed paper survey
 #   - South Africa (SA): Full dataset with special CAAS scale
 #   - Italy (IT2): Second data collection wave
 #   - Russia (RU2): Extra dataset from second data collection wave
@@ -1082,10 +1056,6 @@ df_nl_extra <- read_raw("Dataset NL.sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
@@ -1132,10 +1102,6 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
-  
   # Standard normalization (no lastpage filter - not all sources have this field)
   normalize_column_names() %>%
   
@@ -1145,43 +1111,39 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
 write_processed(df_ru_extra, "RU_extra.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# ARGENTINA ----
-# ARGENTINA EXTRA DATASET
-# SOURCE: "Dataset AR.sav 16.4.2023.sav" (manually provided Argentine dataset)
+# ISRAEL ----
+# ISRAEL EXTRA DATASET
+# SOURCE: "Dataset AR.sav 16.4.2023.sav" (manually provided Israeli Arabic dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # ADMINISTRATION: Printed paper survey (printed=1)
-# NOTE: Uses latin1 encoding (Spanish characters)
-# OUTPUT: AR_extra.sav
+# NOTE: Uses UTF-8 encoding (for Arabic characters)
+# OUTPUT: IL_AR_extra.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_ar_extra <- read_sav(file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "latin1") %>%
+df_il_ar_extra <- read_sav(file.path(DIR_RAW, "Dataset AR.sav 16.4.2023.sav"), encoding = "UTF-8") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Standard normalization
   normalize_column_names()
 
 # Create IDs and mark as printed survey
-df_ar_extra <- df_ar_extra %>%
-  # Create IDs starting from 101 (avoid conflicts with other AR datasets)
-  mutate(id = 101:(100 + nrow(df_ar_extra))) %>%
+df_il_ar_extra <- df_il_ar_extra %>%
+  # Create IDs starting from 101 (avoid conflicts with other IL datasets)
+  mutate(id = 101:(100 + nrow(df_il_ar_extra))) %>%
   
-  # Add AR prefix to IDs
-  mutate(id = str_c("AR_extra_", id)) %>%
+  # Add IL prefix to IDs
+  mutate(id = str_c("IL_extra_", id)) %>%
   
-  # Mark dataset category (PS_IS = Palestinian/Israeli Studies group)
-  mutate(dataset = "PS_IS") %>%
+  # Mark dataset category (IS_AR = Palestinian/Israeli Studies group)
+  mutate(dataset = "IS_AR") %>%
   
   # Mark as printed paper survey (1 = printed, 0 = online)
   mutate(printed = 1)
 
-write_processed(df_ar_extra, "AR_extra.sav")
+write_processed(df_il_ar_extra, "IL_AR_extra.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SOUTH AFRICA ----
@@ -1242,23 +1204,18 @@ write_processed(df_it2, "IT_extra.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_ru_extra2 <- read_raw("RU_extra2.sav") %>%
-  # Create ID with NL prefix
-  mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
+  # Create ID with RU prefix
+  mutate(id = str_c("RU_extra2_", id), dataset = "RU") %>%
   
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
-  
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_processed(df_nl_extra, "NL_extra.sav")
-
+write_processed(df_ru_extra2, "RU_extra2.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SLOVAKIA ----
@@ -1278,8 +1235,8 @@ df_sk_extra <- read_raw("Dataset Slovakia.sav") %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
   
   # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
+  rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
+  rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
   
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
@@ -1305,10 +1262,6 @@ df_rs_extra <- read_raw("LP and FTOS raw data Serbia.xlsx") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^LPSgoals_goal(\\d+_)", "LPSgoal\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPSgoals(\\d+_)", "LPSgoal\\1")) %>%
   
   # Standard normalization and filter incomplete
   normalize_column_names() %>%

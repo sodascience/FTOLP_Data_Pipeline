@@ -131,7 +131,7 @@ analyze_duration_histograms <- function(df, dfname, unit = c("mins", "secs", "ho
 }
 
 for (f in first_stage_df) {
-  # f<- "PTBR_277273_clean.sav"
+  # f<- "BR_PT_277273_clean.sav"
   df <- read_sav(paste0(f, "_clean.sav"))
   res <- analyze_duration_histograms(df, f, unit = "mins", save_dir = "duration_plots")
   print(res$plot)
