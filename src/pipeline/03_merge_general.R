@@ -69,6 +69,23 @@ names(dfs) <- gsub("\\.sav$", "", basename(file_list))
 all_na_values <- c(990, 991, 999)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Rename variables based on data collection stage
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Gender: For pilot and first stage datasets, Gender_v1; others: Gender_v2
+# Use the Datasets list from config/paths.R to identify which datasets belong to which stage
+for (df_name in names(dfs)) {
+  # if df_name starts with any of the datasets in first_stage or "br_pilot", rename Gender to Gender_v1, 
+  # else rename Gender to Gender_v2
+  if (any(grepl(paste(DATASETS$first_stage, collapse = "|"), df_name)) || grepl("^br_pilot", df_name)) {
+    dfs[[df_name]] <- dfs[[df_name]] %>%
+      rename(Gender_v1 = Gender)
+  } else {
+    dfs[[df_name]] <- dfs[[df_name]] %>%
+      rename(Gender_v2 = Gender)
+  }
+}
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define relevant variables ----
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define which columns should be treated as categorical (→ character)
@@ -76,7 +93,8 @@ categorical_cols <- c(
   "id",                          # Participant identifier (e.g., "CH_277273_123")
   "Nationality",                 # Country (preserve label like "Brazil" not code 30)
   "Sex",
-  "Gender",
+  "Gender_v1",
+  "Gender_v2",
   "Gender_other",                # Open-ended gender response
   "Gender_final"
 )
@@ -365,7 +383,7 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
 merged_df <- label_merge_NAs(bind_rows(dfs))
 
 # Rearrange columns: put id and demographic first, then scales
-demographic_cols <- c("id", "Nationality", "Sex", "Gender", "Gender_other", "Gender_final", "Age")
+demographic_cols <- c("id", "Nationality", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
 demographic_cols <- demographic_cols[demographic_cols %in% names(merged_df)]
 scale_cols <- setdiff(names(merged_df), demographic_cols)
 merged_df <- merged_df %>% select(all_of(demographic_cols), all_of(scale_cols))
