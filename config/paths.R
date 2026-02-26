@@ -9,6 +9,7 @@ DIR_RAW <- file.path(PROJECT_ROOT, "raw")
 DIR_SPLIT <- file.path(PROJECT_ROOT, "split")
 DIR_CLEAN <- file.path(PROJECT_ROOT, "clean")
 DIR_EXTERNAL <- file.path(PROJECT_ROOT, "external")
+DIR_MERGED <- file.path(PROJECT_ROOT, "merged")
 
 # Dataset groupings
 DATASETS <- list(

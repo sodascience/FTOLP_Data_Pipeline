@@ -6,12 +6,8 @@ library(labelled)
 # missing values codes
 reason_codes <- c(
   "by_design"       = 990,
-  "unknown_missing" = 991,
-  "tech_error"      = 992,
-  "refused"         = 993,
-  "dubious"         = 994,
-  "nonresponse"     = 995,
-  "not_applicable"  = 999
+  "tech_error"      = 991,
+  "missing"         = 999
 )
 
 # get label schema
