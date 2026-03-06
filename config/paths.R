@@ -18,6 +18,7 @@ DATASETS <- list(
   us = c("US_216254", "US_868141"),
   ch_us = c("CH_277273", "CH_999625", "US_216254", "US_868141"),
   ch_us_10_min = c("CH_277273", "US_868141"),
+  pilot = c("br_pilot"),
   first_stage = c(
     "CH_277273", "EN_277273", "ES_277273", "IT_277273",
     "BR_PT_277273", "SL_277273", "IT_extra",

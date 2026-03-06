@@ -91,13 +91,115 @@ for (df_name in names(dfs)) {
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Process Nationality, Foreigner, and Origin variables ----
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Nationality means different things depending on the collection stage:
+#
+#   PILOT / FIRST_STAGE / "extra" datasets:
+#     Nationality = country code with categorical labels → keep as character country name
+#
+#   SECOND_STAGE datasets (all others):
+#     Nationality = citizen indicator (yes/no, labelled, may vary by language
+#     and encoding: 0/1, 1/2, etc.) → decode using label text → Citizen (0/1)
+#     yes = is a citizen (1), no = not a citizen (0)
+#
+# Origin = country where participant grew up → character country name
+
+# Helper: TRUE if df_name belongs to pilot or first_stage groups or has "extra"
+is_country_nationality <- function(df_name) {
+  grepl("extra", df_name, ignore.case = TRUE) ||
+    any(sapply(DATASETS$pilot,       function(p) grepl(p, df_name, fixed = TRUE))) ||
+    any(sapply(DATASETS$first_stage, function(p) grepl(p, df_name, fixed = TRUE)))
+}
+
+# Multilingual pattern for "yes / is a citizen"
+# Languages inferred from dataset name prefixes (CH, EN, ES, IT, BR_PT, SL, NL)
+# plus additional languages anticipated in second-stage data collection
+citizen_yes_pattern <- paste0(
+  "^(",
+  "yes",            # English (EN)
+  "|ja",            # German (DE), Dutch (NL), Slovenian (SL), Scandinavian
+  "|s[i\u00ed\u00ec]", # Spanish s\u00ed (ES), Italian s\u00ec (IT), informal si
+  "|sim",           # Portuguese (BR_PT)
+  "|oui",           # French (FR)
+  "|да",            # Russian (RU), Bulgarian, Serbian/Macedonian Cyrillic
+  "|tak",           # Polish (PL)
+  "|так",            # Ukrainian Cyrillic
+  "|ano",           # Czech (CZ)
+  "|\u00e1no",      # Slovak
+  "|da",            # Croatian (HR), Serbian Latin, Romanian (RO), Albanian
+  "|evet",          # Turkish (TR)
+  "|igen",          # Hungarian (HU)
+  "|ναι",            # Greek (GR)
+  "|نعم",            # Arabic (AR)
+  "|\u662f",        # Chinese \u662f (CH)
+  "|\u662f\u7684",  # Chinese \u662f\u7684
+  "|\uc608",        # Korean formal \uc608
+  "|\ub124",        # Korean informal \ub124
+  "|כן",            # Hebrew (HE)
+  "|ใช่",            # Thai (TH)
+  "|हाँ",            # Hindi (HI)
+  "|c\u00f3",       # Vietnamese (VI) c\u00f3
+  "|kyll\u00e4",    # Finnish (FI) kyll\u00e4
+  "|ta",            # various
+  ")"
+)
+
+for (df_name in names(dfs)) {
+  df <- dfs[[df_name]]
+
+  # --- Nationality ---
+  if ("Nationality" %in% names(df)) {
+    nat_col <- df[["Nationality"]]
+
+    if (is_country_nationality(df_name)) {
+      # Pilot / first_stage / extra: country code → decode to country name string
+      if (is.labelled(nat_col)) {
+        df[["Nationality"]] <- as.character(as_factor(nat_col))
+      } else {
+        df[["Nationality"]] <- as.character(nat_col)
+      }
+      # Row-level NAs: variable present but participant did not answer → true missing
+      df[["Nationality"]][is.na(df[["Nationality"]])] <- "999"
+    } else {
+      # Second-stage: citizen indicator → normalize to 0/1
+      # Decode label text (handles multilingual labels) then match against "yes" pattern
+      # 1 = citizen of the country, 0 = not a citizen
+      label_strings <- as.character(as_factor(nat_col))
+      citizen_vals <- as.integer(
+        grepl(citizen_yes_pattern, trimws(label_strings), ignore.case = TRUE)
+      )
+      # Propagate R NAs (true missing responses)
+      citizen_vals[is.na(label_strings)] <- NA_integer_
+      df[["Citizen"]]     <- citizen_vals
+      df[["Nationality"]] <- NULL
+    }
+  }
+
+  # --- Origin ---
+  if ("Origin" %in% names(df)) {
+    origin_col <- df[["Origin"]]
+    if (is.labelled(origin_col)) {
+      df[["Origin"]] <- as.character(as_factor(origin_col))
+    } else {
+      df[["Origin"]] <- as.character(origin_col)
+    }
+    # Row-level NAs: variable present but participant did not answer → true missing
+    df[["Origin"]][is.na(df[["Origin"]])] <- "999"
+  }
+
+  dfs[[df_name]] <- df
+}
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define relevant variables ----
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define which columns should be treated as categorical (→ character)
 categorical_cols <- c(
   "id",                          # Participant identifier (e.g., "CH_277273_123")
   "source_dataset",              # Source dataset filename (e.g., "CH_277273_clean")
-  "Nationality",                 # Country (preserve label like "Brazil" not code 30)
+  "Nationality",                 # Country name (from datasets with country-code Nationality)
+  "Origin",                      # Country where participant grew up
   "Sex",
   "Gender_v1",
   "Gender_v2",
@@ -111,7 +213,8 @@ numerical_cols <- c(
   # Scale items (e.g., FTOS_pilot_1, FTOS_v1_1, FTOS_v2_1, LPS_pilot_1, etc.)
   grep("^(FTOS|LPS)_(pilot|v1|v2)_\\d+$", all_cols, value = TRUE),
   # Demographics that should be numeric
-  "Age"
+  "Age",
+  "Citizen"                      # 0/1 citizen indicator (1 = citizen, from second-stage datasets)
 )
 
 # Combine all relevant columns into one vector for processing
@@ -388,8 +491,20 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 merged_df <- label_merge_NAs(bind_rows(dfs))
 
+# Replace padding NAs in character demographic columns with "990" (missing by design).
+# Numeric padding NAs are already handled inside label_merge_NAs(); character columns
+# need separate treatment because SPSS user-missing codes only apply to numeric variables.
+# At this point any remaining NA in these columns must be a padding NA (the column did
+# not exist in that source dataset) because within-dataset NAs were already marked "999".
+char_demo_cols <- c("Nationality", "Origin")
+for (col in char_demo_cols) {
+  if (col %in% names(merged_df)) {
+    merged_df[[col]][is.na(merged_df[[col]])] <- "990"
+  }
+}
+
 # Rearrange columns: put id, info and demographic first, then scales
-first_cols <- c("id", "source_dataset", "Nationality", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
+first_cols <- c("id", "source_dataset", "Nationality", "Citizen", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
 first_cols <- first_cols[first_cols %in% names(merged_df)]
 scale_cols <- setdiff(names(merged_df), first_cols)
 merged_df <- merged_df %>% select(all_of(first_cols), all_of(scale_cols))
