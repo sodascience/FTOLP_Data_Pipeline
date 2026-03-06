@@ -62,6 +62,11 @@ dfs <- lapply(file_list, read_sav)
 # E.g., "CH_277273_clean.sav" becomes "CH_277273_clean"
 names(dfs) <- gsub("\\.sav$", "", basename(file_list))
 
+# Add source_dataset column to each dataframe
+for (df_name in names(dfs)) {
+  dfs[[df_name]]$source_dataset <- df_name
+}
+
 # Define SPSS missing value codes
 # These will be applied to all numeric columns when merging
 # NOTE: SPSS only allows up to 3 user-missing values per variable
@@ -91,6 +96,7 @@ for (df_name in names(dfs)) {
 # Define which columns should be treated as categorical (→ character)
 categorical_cols <- c(
   "id",                          # Participant identifier (e.g., "CH_277273_123")
+  "source_dataset",              # Source dataset filename (e.g., "CH_277273_clean")
   "Nationality",                 # Country (preserve label like "Brazil" not code 30)
   "Sex",
   "Gender_v1",
@@ -382,11 +388,11 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 merged_df <- label_merge_NAs(bind_rows(dfs))
 
-# Rearrange columns: put id and demographic first, then scales
-demographic_cols <- c("id", "Nationality", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
-demographic_cols <- demographic_cols[demographic_cols %in% names(merged_df)]
-scale_cols <- setdiff(names(merged_df), demographic_cols)
-merged_df <- merged_df %>% select(all_of(demographic_cols), all_of(scale_cols))
+# Rearrange columns: put id, info and demographic first, then scales
+first_cols <- c("id", "source_dataset", "Nationality", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
+first_cols <- first_cols[first_cols %in% names(merged_df)]
+scale_cols <- setdiff(names(merged_df), first_cols)
+merged_df <- merged_df %>% select(all_of(first_cols), all_of(scale_cols))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SAVE COMBINED DATASET
