@@ -91,7 +91,7 @@ for (df_name in names(dfs)) {
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# Process Nationality, Foreigner, and Origin variables ----
+# Process Nationality, Citizen, and Origin variables ----
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Nationality means different things depending on the collection stage:
 #
@@ -145,6 +145,51 @@ citizen_yes_pattern <- paste0(
   ")"
 )
 
+# Per-dataset regex patterns for deriving Citizen from decoded Nationality strings.
+# Covers both the local-language label variants (as surveys were authored in the
+# local language) and English equivalents (some SPSS files use English labels).
+#
+#   CH_*    : Chinese labels — Mainland China, HK, Macau, Taiwan
+#   EN_*    : English labels — United Kingdom and constituent countries
+#   ES_*    : Spanish labels — España / Spain
+#   IT_*    : Italian labels — Italia / Italy
+#   BR_PT_* : Portuguese labels — Brasil / Brazil, Portugal
+#   SL_*    : Slovenian labels — Slovenija / Slovenia
+#   US_*    : English labels — United States / USA
+citizen_country_patterns <- list(
+  CH    = paste0(
+    "\u4e2d\u56fd\u5927\u9646|\u4e2d\u56fd|\u4e2d\u534e\u4eba\u6c11\u5171\u548c\u56fd",  # 中国大陆 / 中国 / 中华人民共和国
+    "|\u9999\u6e2f",                           # 香港
+    "|\u6fb3\u95e8|\u6fb3\u9580",               # 澳门 / 澳門
+    "|\u53f0\u6e7e|\u53f0\u7063",               # 台湾 / 台灣
+    "|Mainland China|Hong Kong|Macau|Macao|Taiwan|China"
+  ),
+  EN    = paste0(
+    "United Kingdom|Britain|Great Britain|England|Scotland|Wales|Northern Ireland",
+    "|UK|U\\.K\\."
+  ),
+  ES    = "Espa\u00f1a|Espana|Spain",            # España
+  IT    = "Italia|Italy|Itália",
+  BR_PT = "Brasil|Brazil|Portugal",
+  SL    = "Slovenija|Slovenia",
+  US    = paste0(
+    "United States|United States of America|USA|U\\.S\\.A\\.",
+    "|U\\.S\\.|America"
+  )
+)
+
+# Helper: return the citizen pattern for a given df_name, or NULL if not found
+get_citizen_pattern <- function(df_name) {
+  if      (grepl("^CH",           df_name)) citizen_country_patterns[["CH"]]
+  else if (grepl("^EN",           df_name)) citizen_country_patterns[["EN"]]
+  else if (grepl("^ES",           df_name)) citizen_country_patterns[["ES"]]
+  else if (grepl("^IT",           df_name)) citizen_country_patterns[["IT"]]
+  else if (grepl("^BR_PT|^br_",   df_name)) citizen_country_patterns[["BR_PT"]]
+  else if (grepl("^SL",           df_name)) citizen_country_patterns[["SL"]]
+  else if (grepl("^US",           df_name)) citizen_country_patterns[["US"]]
+  else NULL
+}
+
 for (df_name in names(dfs)) {
   df <- dfs[[df_name]]
 
@@ -161,6 +206,24 @@ for (df_name in names(dfs)) {
       }
       # Row-level NAs: variable present but participant did not answer → true missing
       df[["Nationality"]][is.na(df[["Nationality"]])] <- "999"
+
+      # Derive Citizen from the decoded Nationality value:
+      #   - "extra" datasets: all participants are local → Citizen = 1
+      #   - other pilot/first_stage: match decoded country name against known patterns
+      #   - Nationality = "999" (true missing) → Citizen = NA
+      if (grepl("extra", df_name, ignore.case = TRUE)) {
+        df[["Citizen"]] <- 1L
+      } else {
+        pattern <- get_citizen_pattern(df_name)
+        if (!is.null(pattern)) {
+          nat_decoded <- df[["Nationality"]]
+          df[["Citizen"]] <- as.integer(
+            grepl(pattern, nat_decoded, ignore.case = TRUE, perl = TRUE)
+          )
+          # True-missing Nationality → Citizen is also missing
+          df[["Citizen"]][nat_decoded == "999"] <- NA_integer_
+        }
+      }
     } else {
       # Second-stage: citizen indicator → normalize to 0/1
       # Decode label text (handles multilingual labels) then match against "yes" pattern
