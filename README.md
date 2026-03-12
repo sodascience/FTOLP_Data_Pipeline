@@ -305,11 +305,9 @@ DATASETS <- list(
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 Qixiang Fang
-
 ---
 
-**Project**: Narrating the Future (Bogdan)  
-**Last Updated**: November 2025
+## Contact
+Do you have questions, suggestions, or remarks? Feel free to contact [Qixiang Fang](https://github.com/fqixiang).
 
+<img src="docs/logos/soda.png" alt="SoDa logo" width="250px"/> 
