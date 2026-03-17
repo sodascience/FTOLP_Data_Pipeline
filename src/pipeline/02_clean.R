@@ -63,6 +63,7 @@ ch_us_10_min <- DATASETS$ch_us_10_min      # Datasets to filter for <10 min dura
 first_stage <- DATASETS$first_stage        # All first-stage surveys
 first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
 first_stage_ch <- DATASETS$first_stage_ch  # China first-stage
+to_remove <- DATASETS$to_remove            # Datasets to exclude from cleaning (e.g., removed datasets)
 
 # Get list of all split SPSS files to clean including files in subfolders
 file_list <- list.files(
@@ -71,6 +72,12 @@ file_list <- list.files(
   full.names = TRUE,                  # Return full paths (not just filenames)
   recursive = TRUE                   # Include subdirectories
 )
+
+# Update list of datasets to clean, excluding any in the "to_remove" list
+updated_file_list <- file_list %>%
+  set_names(basename(.) %>% file_path_sans_ext()) %>%  # Name list by dataset name (without .sav)
+  keep(~ !any(str_detect(., to_remove)))               # Exclude datasets in "to_remove" list
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 
@@ -103,7 +110,7 @@ filter_na <- mk_group("Missing response",
     mk_step(
       "FTOS_v2 or LPS missing",
       step_drop_na_block("^(FTOS_v2_\\d+|LPS_v2_\\d+)$"),  # Regex: FTOS_v2_1, LPS_v2_1, etc.
-      exclude = c(br_pt, "IT_extra")      # Skip BR/PT and Italian extra
+      exclude = c(br_pt, "IT_auto")      # Skip BR/PT and Italian auto
     ),
     
     # Check 3: Pilot FTOS
@@ -145,7 +152,7 @@ constant_and_binary <- mk_group(
     mk_step(
       "FTOS_v2", 
       step_constant_answers("^FTOS_v2_\\d+$"),    # Second-stage FTOS
-      datasets = c("IT_extra")                    # Only Italian extra dataset
+      datasets = c("IT_auto")                    # Only Italian auto dataset
     ),
     
     mk_step(
@@ -263,7 +270,7 @@ remove_zigzag <- mk_group(
     mk_step(
       "FTOS2",
       step_detect_zigzag(col_pattern = "^FTOS_v2_\\d+$"),   # Second-stage FTOS
-      datasets = c("IT_extra")                              # Italian extra only
+      datasets = c("IT_auto")                              # Italian auto only
     ),
     
     mk_step(
@@ -275,20 +282,20 @@ remove_zigzag <- mk_group(
     mk_step(
       "LPS2",
       step_detect_zigzag(col_pattern = "^LPS_v2_\\d+$"),    # Second-stage LPS
-      datasets = c("IT_extra")                              # Italian extra only
+      datasets = c("IT_auto")                              # Italian auto only
     ),
 
     # Multi-country scales (BR/PT, US, China)
     mk_step(
       "MLQ",
       step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
-      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_extra")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_auto")  # BR/PT + US + CH + IT
     ),
     
     mk_step(
       "AS",
       step_detect_zigzag(col_pattern = "^AS_\\d+$"),        # Authenticity Scale
-      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_extra")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_auto")  # BR/PT + US + CH + IT
     ),
 
     # Brazil/Portugal specific scales
@@ -335,13 +342,13 @@ remove_zigzag <- mk_group(
     mk_step(
       "IT",
       step_detect_zigzag(col_pattern = "^IT_\\d+$"),        # Italian Time Perspective scale
-      datasets = c("IT_277273", "IT_extra")
+      datasets = c("IT_277273", "IT_auto")
     ),
     
     mk_step(
       "DMF",
       step_detect_zigzag(col_pattern = "^DMF_\\d+$"),       # Decision Making Fluency
-      datasets = c("IT_277273", "IT_extra")
+      datasets = c("IT_277273", "IT_auto")
     )
   )
 )
@@ -445,7 +452,7 @@ steps <- list(
 all_summaries <- list()
 
 # Process each file in the processed directory
-for (f in file_list) {
+for (f in updated_file_list) {
   # Wrap in tryCatch to continue even if one file fails
   tryCatch(
     {
