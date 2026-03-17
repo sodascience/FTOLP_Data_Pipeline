@@ -95,7 +95,7 @@ for (df_name in names(dfs)) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Nationality means different things depending on the collection stage:
 #
-#   PILOT / FIRST_STAGE / "extra" datasets:
+#   PILOT / FIRST_STAGE / "auto" datasets:
 #     Nationality = country code with categorical labels → keep as character country name
 #
 #   SECOND_STAGE datasets (all others):
@@ -105,9 +105,9 @@ for (df_name in names(dfs)) {
 #
 # Origin = country where participant grew up → character country name
 
-# Helper: TRUE if df_name belongs to pilot or first_stage groups or has "extra"
+# Helper: TRUE if df_name belongs to pilot or first_stage groups or has "auto"
 is_country_nationality <- function(df_name) {
-  grepl("extra", df_name, ignore.case = TRUE) ||
+  grepl("auto", df_name, ignore.case = TRUE) ||
     any(sapply(DATASETS$pilot,       function(p) grepl(p, df_name, fixed = TRUE))) ||
     any(sapply(DATASETS$first_stage, function(p) grepl(p, df_name, fixed = TRUE)))
 }
@@ -198,7 +198,7 @@ for (df_name in names(dfs)) {
     nat_col <- df[["Nationality"]]
 
     if (is_country_nationality(df_name)) {
-      # Pilot / first_stage / extra: country code → decode to country name string
+      # Pilot / first_stage / auto: country code → decode to country name string
       if (is.labelled(nat_col)) {
         df[["Nationality"]] <- as.character(as_factor(nat_col))
       } else {
@@ -208,10 +208,10 @@ for (df_name in names(dfs)) {
       df[["Nationality"]][is.na(df[["Nationality"]])] <- "999"
 
       # Derive Citizen from the decoded Nationality value:
-      #   - "extra" datasets: all participants are local → Citizen = 1
+      #   - "auto" datasets: all participants are local → Citizen = 1
       #   - other pilot/first_stage: match decoded country name against known patterns
       #   - Nationality = "999" (true missing) → Citizen = NA
-      if (grepl("extra", df_name, ignore.case = TRUE)) {
+      if (grepl("auto", df_name, ignore.case = TRUE)) {
         df[["Citizen"]] <- 1L
       } else {
         pattern <- get_citizen_pattern(df_name)
@@ -249,6 +249,12 @@ for (df_name in names(dfs)) {
     }
     # Row-level NAs: variable present but participant did not answer → true missing
     df[["Origin"]][is.na(df[["Origin"]])] <- "999"
+  }
+
+  # Datasets with "auto" in filename contain only local/automatic participants → Citizen = 1
+  # unconditionally, regardless of whether Nationality or any other column exists.
+  if (grepl("auto", df_name, ignore.case = TRUE)) {
+    df[["Citizen"]] <- 1L
   }
 
   dfs[[df_name]] <- df
