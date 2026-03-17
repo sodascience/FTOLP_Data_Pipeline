@@ -47,3 +47,4 @@ rsconnect/
 
 # md files under docs
 docs/*.md
+.DS_Store
