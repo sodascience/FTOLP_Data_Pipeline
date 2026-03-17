@@ -934,12 +934,13 @@ df_main2_other <- df_main_2 %>%
       startlanguage == "es-MX" ~ "MX",        # Spanish (Mexico)
       startlanguage == "pt-BR" ~ "BR_PT",      # Portuguese (Brazil)
       startlanguage %in% c("zh-Hans", "zh-Hant-HK") ~ "CH",  # Chinese (both variants)
+      startlanguage %in% c("ar", "AR") ~ "IL_AR", # Arabic -> Israeli Arabic (using AR code but marked as IL_AR dataset)
       TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, AR, etc.)
     ),
     
     # Assign dataset category codes (for later merging logic)
     dataset = case_when(
-      country == "AR" ~ "IS_AR",     # Arabic -> Palestinian/Israeli Studies
+      country == "AR" ~ "IL_AR",     # Israeli Arabic  
       country == "ID" ~ "ID",        # Indonesia
       country == "MS" ~ "MS",        # Malay
       country == "MX" ~ "MX",        # Mexico
@@ -953,7 +954,7 @@ df_main2_other <- df_main_2 %>%
     ),
     
     # Mark printed administration for Israel only
-    printed = if_else(country == "AR", 0, NA_real_)
+    printed = if_else(country == "IL", 0, NA_real_)
   ) %>%
   
   # Apply country-specific ID filters (remove IDs above cutoffs for quality control)
@@ -1141,8 +1142,8 @@ df_il_ar_extra <- df_il_ar_extra %>%
   # Add IL prefix to IDs
   mutate(id = str_c("IL_extra_", id)) %>%
   
-  # Mark dataset category (IS_AR = Palestinian/Israeli Studies group)
-  mutate(dataset = "IS_AR") %>%
+  # Mark dataset category (IL_AR = Israeli Arabic group)
+  mutate(dataset = "IL_AR") %>%
   
   # Mark as printed paper survey (1 = printed, 0 = online)
   mutate(printed = 1)
