@@ -123,7 +123,6 @@ step_constant_answers <- function(col_pattern = "^FTOS_v1_\\d+$") {
     })
     block <- as.data.frame(block, stringsAsFactors = FALSE)
 
-    non_na <- rowSums(!is.na(block))
     all_same <- apply(block, 1L, function(r) {
       vals <- r[!is.na(r)]
       if (length(vals) < length(have)) {
