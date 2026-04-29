@@ -149,12 +149,13 @@ to_numeric <- function(x) {
 
 step_guttman <- function(scale_patterns,
                          z_thresh = 2,
-                         max_fails = 2) {
+                         fail_ratio_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
   function(df) {
     fail_flags <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
       cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
@@ -168,13 +169,11 @@ step_guttman <- function(scale_patterns,
       if (all(vapply(mat, function(v) {
         all(is.na(v))
       }, logical(1)))) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       rng <- range(unlist(mat), na.rm = TRUE)
       if (!all(is.finite(rng))) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
       v_min <- rng[1]
@@ -182,7 +181,6 @@ step_guttman <- function(scale_patterns,
       Ncat <- as.integer(v_max - v_min + 1L)
       if (!is.finite(Ncat) ||
         Ncat < 2L) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
@@ -198,21 +196,27 @@ step_guttman <- function(scale_patterns,
         }
       )
       if (is.null(gfit)) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       g <- as.numeric(gfit[["PFscores"]][["PFscores"]])
       z <- as.numeric(scale(g))
-      fail_flags[[scale_name]] <- ifelse(is.na(z) |
-        abs(z) <= z_thresh, 0L, 1L)
+      row_applicable <- rowSums(!is.na(mat)) == ncol(mat)
+      applied_flags[[scale_name]] <- as.integer(row_applicable)
+      fail_flags[[scale_name]] <- ifelse(
+        !row_applicable,
+        NA_integer_,
+        ifelse(is.na(z) | abs(z) <= z_thresh, 0L, 1L)
+      )
     }
 
     if (ncol(fail_flags) == 0L) {
       return(df)
     }
-    total_fails <- rowSums(fail_flags, na.rm = TRUE)
-    keep_rows <- total_fails < max_fails
+    total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+    total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
+    fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
+    keep_rows <- total_applied == 0 | fail_ratio <= fail_ratio_threshold
     # message(sprintf(
     #  "Guttman Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
@@ -222,12 +226,13 @@ step_guttman <- function(scale_patterns,
   }
 }
 
-step_mahalanobis <- function(scale_patterns, max_fails = 2) {
+step_mahalanobis <- function(scale_patterns, fail_ratio_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
   function(df) {
     fail_flags <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
       cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
@@ -242,26 +247,36 @@ step_mahalanobis <- function(scale_patterns, max_fails = 2) {
         all(is.na(v))
       }, logical(1))
       if (all(all_na)) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       # drop all-NA columns to avoid singular cov
       block <- block[, !all_na, drop = FALSE]
       if (ncol(block) < 2) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       res <- rstatix::mahalanobis_distance(block)
-      fail_flags[[scale_name]] <- as.integer(res$is.outlier)
+      outlier <- as.integer(res$is.outlier)
+      if (length(outlier) != nrow(block)) {
+        outlier <- rep(NA_integer_, nrow(block))
+      }
+      row_applicable <- rowSums(!is.na(block)) == ncol(block)
+      applied_flags[[scale_name]] <- as.integer(row_applicable)
+      fail_flags[[scale_name]] <- ifelse(
+        !row_applicable,
+        NA_integer_,
+        outlier
+      )
     }
 
     if (ncol(fail_flags) == 0L) {
       return(df)
     }
-    total_fails <- rowSums(fail_flags, na.rm = TRUE)
-    keep_rows <- total_fails < max_fails
+    total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+    total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
+    fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
+    keep_rows <- total_applied == 0 | fail_ratio <= fail_ratio_threshold
     # message(sprintf(
     #  "Mahalanobis Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
