@@ -462,6 +462,40 @@ for (f in updated_file_list) {
       # Extract filename without extension (e.g., "CH_277273")
       name <- file_path_sans_ext(basename(f))
 
+      # Save rows removed by the constant-answer filter for br_pilot only
+      if (identical(name, "br_pilot")) {
+        df_with_row_id <- df %>% mutate(.row_id = row_number())
+
+        res_after_missing <- run_cleaning_pipeline(
+          df_with_row_id,
+          name,
+          steps = list(filter_na)
+        )
+
+        res_after_constant <- run_cleaning_pipeline(
+          df_with_row_id,
+          name,
+          steps = list(filter_na, constant_and_binary)
+        )
+
+        removed_constant <- res_after_missing$df_clean %>%
+          anti_join(
+            res_after_constant$df_clean %>% select(.row_id),
+            by = ".row_id"
+          ) %>%
+          select(-.row_id)
+
+        removed_dir <- file.path(DIR_CLEAN, "removed")
+        if (!dir.exists(removed_dir)) {
+          dir.create(removed_dir, recursive = TRUE)
+        }
+
+        write_sav(
+          removed_constant,
+          file.path(removed_dir, "br_pilot_constant_removed.sav")
+        )
+      }
+
       # Optional diagnostic checks (commented out)
       # Can be enabled to inspect specific columns before cleaning
       # if ("FTOS_x" %in% names(df)) {
