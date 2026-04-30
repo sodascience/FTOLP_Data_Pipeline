@@ -196,7 +196,7 @@ brazil_pilot_fix_factors <- function(df) {
     return(df)
   }
 
-  df %>%
+  result <- df %>%
     mutate(
       across(
         # Apply transformation to all scale columns
@@ -212,7 +212,9 @@ brazil_pilot_fix_factors <- function(df) {
 
             # STEP 2: Convert to factor to get unique levels
             # Example: c("A1", "A2", "A1", "A3") -> factor with levels("A1", "A2", "A3")
-            factor_vec <- as.factor(.x)
+            x_chr <- as.character(.x)
+            x_chr <- dplyr::na_if(x_chr, "")
+            factor_vec <- factor(x_chr, levels = sort(unique(x_chr[!is.na(x_chr)])))
 
             # STEP 3: Convert factor to integers (1, 2, 3 based on level order)
             # This converts "A1"→1, "A2"→2, "A3"→3
@@ -246,6 +248,8 @@ brazil_pilot_fix_factors <- function(df) {
         }
       )
     )
+
+  result
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
