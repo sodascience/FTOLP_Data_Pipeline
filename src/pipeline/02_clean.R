@@ -52,6 +52,12 @@ library(here)
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
 
+# Load external US inclusion list for extra check
+external_us_file <- file.path(DIR_EXTERNAL, "DataSet US - Extra Check.sav")
+external_us_df <- read_sav(external_us_file)
+external_us_ids <- unique(normalize_chr(external_us_df$id))
+external_us_ids <- external_us_ids[!is.na(external_us_ids)]
+
 # DATASET GROUPINGS: Define which datasets get which filters
 # These groupings are loaded from config/paths.R
 # They allow applying different filters to different subsets of data
@@ -354,67 +360,62 @@ remove_zigzag <- mk_group(
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# SCALE PATTERNS: Define regex patterns for all scales
-# Used by Mahalanobis and Guttman filters to identify scale columns
-# Each pattern matches all items of a particular scale
-scale_patterns_list <- list(
+# SCALE PATTERNS: Define regex patterns for CH/US atypical pattern checks
+# Used by Mahalanobis + Guttman filters to identify scale columns
+scale_patterns_ch_us <- list(
   FTOS = "^FTOS_v1_\\d+$",           # First-stage FTOS items
-  FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS items
-  FTOS_pilot = "^FTOS_pilot_\\d+$",  # Pilot FTOS items
   LPS = "^LPS_v1_\\d+$",             # First-stage LPS items
-  LPS_v2 = "^LPS_v2_\\d+$",          # Second-stage LPS items
   CAAS = "^CAAS_\\d+$",              # Career Adapt-Abilities Scale
   DGI = "^(Psy_)?DGI_?\\d+$",        # DGI scale (with/without Psy_ prefix)
-  SWLS = "^SWLS_\\d+$",              # Satisfaction With Life Scale
-  IT = "^IT_\\d+$",                  # Italian Time Perspective
-  Pr = "^Pr_\\d+$",                  # Presence scale
-  DMF = "^DMF_\\d+$",                # Decision Making Fluency
   MLQ = "^MLQ_\\d+$",                # Meaning in Life Questionnaire
   AS = "^AS_\\d+$",                  # Authenticity Scale
-  LS = "^LS_BRS\\d+$",               # Life Satisfaction - Brief Resilience Scale
-  ESW = "^ESW_PS\\d+$",              # Existential Scale - Work
-  ESS = "^ES_\\d+$",                 # Existential Scale
-  FS = "^FS_\\d+$",                  # Flourishing Scale
-  GRIT = "^GRIT_\\d+$",              # Grit Scale
-  IPIP = "^IPIP_\\d+$",              # Big Five personality (IPIP)
-  LOT = "^Psy_LOT\\d+$"              # LOT scale (Life Orientation Test)
+  LS = "^LS_BRS\\d+$",               # Life Satisfaction - Brief Resilience Scale (CH only)
+  ESW = "^ESW_PS\\d+$",              # Existential Scale - Work (CH only)
+  ESS = "^ES_\\d+$",                 # Existential Scale (CH only)
+  FS = "^FS_\\d+$",                  # Flourishing Scale (CH only)
+  GRIT = "^GRIT_\\d+$"               # Grit Scale (US only)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# MAHALANOBIS DISTANCE & GUTTMAN ERROR FILTERS ----
-# PURPOSE: Remove statistical outliers and inconsistent response patterns
+# ATYPICAL RESPONSE PATTERN FILTER (CH/US ONLY) ----
+# PURPOSE: Remove participants with atypical response patterns per scale
 #
-# MAHALANOBIS DISTANCE:
-#   - Identifies multivariate outliers (responses far from group center)
-#   - Example: Someone scoring 7 on all items when group average is 4
-#   - Uses chi-square distribution to determine outlier threshold
+# STRATEGY:
+#   - Mahalanobis distance per scale (p < .001)
+#   - Guttman errors per scale (|z| > 2)
+#   - Remove participants flagged in 2+ scales (Mahalanobis and/or Guttman)
 #
-# GUTTMAN ERRORS:
-#   - Identifies response patterns inconsistent with scale structure
-#   - Based on Item Response Theory (IRT) assumptions
-#   - Example: Agreeing with hard items but disagreeing with easy items
-#
-# APPLICATION: Only applied to first-stage surveys (most comprehensive data)
+# APPLICATION: Only China and US datasets
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-mahalanobis_guttman <- mk_group("Mahalanobis/Guttman", steps = list(
-  mk_step(
-    "Mahalanobis",
-    step_mahalanobis(scale_patterns_list),   # Check all scales for multivariate outliers
-    datasets = first_stage                   # Only first-stage surveys
-  ),
-  
-  mk_step(
-    "Guttman", 
-    step_guttman(scale_patterns_list),       # Check all scales for response inconsistency
-    datasets = first_stage                   # Only first-stage surveys
+atypical_patterns <- mk_group(
+  "Atypical response patterns (CH/US)",
+  steps = list(
+    mk_step(
+      "Mahalanobis + Guttman (>=2 scales)",
+      step_atypical_patterns(
+        scale_patterns_ch_us,
+        md_p = 0.001,
+        g_z_thresh = 2,
+        min_scales = 2
+      ),
+      datasets = ch_us
+    )
   )
-))
+)
+
+# US EXTERNAL CHECK FILTER ----
+# PURPOSE: Remove US participants not included in the external inclusion dataset
+us_external_filter <- list(
+  name = "Drop US participants not in external dataset",
+  fn = step_keep_ids(external_us_ids, id_col = "id"),
+  datasets = us
+)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # ASSEMBLE COMPLETE CLEANING PIPELINE ----
 # Combines all cleaning steps in execution order
 # Some steps are dataset-specific, handled by the pipeline framework
-steps <- list(
+base_steps <- list(
   # Missing response filter
   filter_na,
 
@@ -433,8 +434,13 @@ steps <- list(
   # Zigzag pattern filter
   remove_zigzag,
   
-  # Statistical outlier detection
-  mahalanobis_guttman
+  # Atypical response pattern detection (CH/US only)
+  atypical_patterns
+)
+
+steps <- c(
+  base_steps,
+  list(us_external_filter)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -450,6 +456,7 @@ steps <- list(
 
 # Initialize storage for all summaries
 all_summaries <- list()
+excluded_us_external <- list()
 
 # Process each file in the processed directory
 for (f in updated_file_list) {
@@ -508,6 +515,32 @@ for (f in updated_file_list) {
       df_clean <- res$df_clean          # Cleaned data
       audit <- res$audit                # Audit trail (rows removed per step)
 
+      # Save rows removed by US external check after atypical pattern filtering
+      if (name %in% us) {
+        df_with_row_id <- df %>% mutate(.row_id = row_number())
+
+        res_before_external <- run_cleaning_pipeline(
+          df_with_row_id,
+          name,
+          steps = base_steps
+        )
+
+        res_after_external <- run_cleaning_pipeline(
+          df_with_row_id,
+          name,
+          steps = steps
+        )
+
+        removed_external <- res_before_external$df_clean %>%
+          anti_join(
+            res_after_external$df_clean %>% select(.row_id),
+            by = ".row_id"
+          ) %>%
+          select(-.row_id)
+
+        excluded_us_external[[name]] <- removed_external
+      }
+
       # Build wide-format summary showing before/after/removed counts
       summary_wide <- build_wide_summary(
         name = name,                    # Dataset name
@@ -543,6 +576,20 @@ for (f in updated_file_list) {
 summary_all <- bind_rows(all_summaries)
 write_xlsx(summary_all, file.path(DIR_CLEAN, "clean_summary.xlsx"))
 message("Cleaning summary saved to: clean_summary.xlsx")
+
+# WRITE EXCLUDED US PARTICIPANTS (EXTERNAL CHECK) ----
+if (length(excluded_us_external) > 0) {
+  removed_dir <- file.path(DIR_CLEAN, "removed")
+  if (!dir.exists(removed_dir)) {
+    dir.create(removed_dir, recursive = TRUE)
+  }
+
+  excluded_us_all <- bind_rows(excluded_us_external, .id = "source_dataset")
+  write_sav(
+    excluded_us_all,
+    file.path(removed_dir, "us_external_excluded.sav")
+  )
+}
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░

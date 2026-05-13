@@ -149,7 +149,7 @@ to_numeric <- function(x) {
 
 step_guttman <- function(scale_patterns,
                          z_thresh = 2,
-                         fail_ratio_threshold = 0.5) {
+                         fail_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
@@ -216,7 +216,17 @@ step_guttman <- function(scale_patterns,
     total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
     total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
     fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
-    keep_rows <- total_applied == 0 | fail_ratio <= fail_ratio_threshold
+    if (!is.numeric(fail_threshold) || length(fail_threshold) != 1L ||
+      is.na(fail_threshold)) {
+      stop("`fail_threshold` must be a single numeric value.")
+    }
+    if (fail_threshold >= 0 && fail_threshold <= 1) {
+      # Ratio mode (includes 1.0 => no filtering by ratio)
+      keep_rows <- total_applied == 0 | fail_ratio <= fail_threshold
+    } else {
+      threshold_count <- as.integer(fail_threshold)
+      keep_rows <- total_applied == 0 | total_fails < threshold_count
+    }
     # message(sprintf(
     #  "Guttman Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
@@ -226,7 +236,7 @@ step_guttman <- function(scale_patterns,
   }
 }
 
-step_mahalanobis <- function(scale_patterns, fail_ratio_threshold = 0.5) {
+step_mahalanobis <- function(scale_patterns, fail_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
@@ -276,12 +286,123 @@ step_mahalanobis <- function(scale_patterns, fail_ratio_threshold = 0.5) {
     total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
     total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
     fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
-    keep_rows <- total_applied == 0 | fail_ratio <= fail_ratio_threshold
+    if (!is.numeric(fail_threshold) || length(fail_threshold) != 1L ||
+      is.na(fail_threshold)) {
+      stop("`fail_threshold` must be a single numeric value.")
+    }
+    if (fail_threshold >= 0 && fail_threshold <= 1) {
+      # Ratio mode (includes 1.0 => no filtering by ratio)
+      keep_rows <- total_applied == 0 | fail_ratio <= fail_threshold
+    } else {
+      threshold_count <- as.integer(fail_threshold)
+      keep_rows <- total_applied == 0 | total_fails < threshold_count
+    }
     # message(sprintf(
     #  "Mahalanobis Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
     #  sum(keep_rows)
     # ))
+    df[keep_rows, , drop = FALSE]
+  }
+}
+
+step_atypical_patterns <- function(scale_patterns,
+                                   md_p = 0.001,
+                                   g_z_thresh = 2,
+                                   min_scales = 2) {
+  if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
+    stop("`scale_patterns` must be a named list of regex patterns.")
+  }
+  if (!is.numeric(min_scales) || length(min_scales) != 1L ||
+    is.na(min_scales) || min_scales < 1) {
+    stop("`min_scales` must be a single integer >= 1.")
+  }
+
+  function(df) {
+    if (nrow(df) == 0) {
+      return(df)
+    }
+
+    scale_flags <- data.frame(row.names = seq_len(nrow(df)))
+
+    for (scale_name in names(scale_patterns)) {
+      cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
+      if (length(cols) < 2) {
+        next
+      }
+
+      block <- as.data.frame(lapply(df[cols], to_numeric), check.names = FALSE)
+      row_complete <- rowSums(!is.na(block)) == ncol(block)
+      if (sum(row_complete) < 2) {
+        next
+      }
+
+      md_outlier <- rep(0L, nrow(df))
+      md_res <- tryCatch(
+        rstatix::mahalanobis_distance(
+          block[row_complete, , drop = FALSE],
+          alpha = md_p
+        ),
+        error = function(e) {
+          NULL
+        }
+      )
+      if (!is.null(md_res)) {
+        if ("is.outlier" %in% names(md_res)) {
+          md_vals <- as.integer(md_res$is.outlier)
+        } else if ("p" %in% names(md_res)) {
+          md_vals <- as.integer(md_res$p < md_p)
+        } else {
+          md_vals <- rep(0L, sum(row_complete))
+        }
+        if (length(md_vals) != sum(row_complete)) {
+          md_vals <- rep(0L, sum(row_complete))
+        }
+        md_outlier[row_complete] <- md_vals
+      }
+
+      g_outlier <- rep(0L, nrow(df))
+      mat <- block[row_complete, , drop = FALSE]
+      rng <- range(unlist(mat), na.rm = TRUE)
+      if (all(is.finite(rng))) {
+        v_min <- rng[1]
+        v_max <- rng[2]
+        Ncat <- as.integer(v_max - v_min + 1L)
+        if (is.finite(Ncat) && Ncat >= 2L) {
+          mat0 <- as.data.frame(lapply(mat, function(v) {
+            as.integer(round(v - v_min))
+          }), check.names = FALSE)
+          gfit <- tryCatch(
+            PerFit::Gpoly(as.matrix(mat0), Ncat = Ncat),
+            error = function(e) {
+              NULL
+            }
+          )
+          if (!is.null(gfit)) {
+            g <- as.numeric(gfit[["PFscores"]][["PFscores"]])
+            z <- as.numeric(scale(g))
+            gut_vals <- ifelse(is.na(z) | abs(z) <= g_z_thresh, 0L, 1L)
+            if (length(gut_vals) != sum(row_complete)) {
+              gut_vals <- rep(0L, sum(row_complete))
+            }
+            g_outlier[row_complete] <- gut_vals
+          }
+        }
+      }
+
+      scale_flags[[scale_name]] <- ifelse(
+        row_complete & ((md_outlier == 1L) | (g_outlier == 1L)),
+        1L,
+        0L
+      )
+    }
+
+    if (ncol(scale_flags) == 0L) {
+      return(df)
+    }
+
+    total_flags <- rowSums(scale_flags == 1L, na.rm = TRUE)
+    keep_rows <- total_flags < min_scales
     df[keep_rows, , drop = FALSE]
   }
 }
@@ -420,6 +541,21 @@ step_filter_min_duration <- function(start_col = "startdate",
     dur <- as.numeric(difftime(end, start, units = units))
 
     df[!is.na(dur) & dur >= threshold, , drop = FALSE]
+  }
+}
+
+step_keep_ids <- function(allowed_ids, id_col = "id") {
+  force(allowed_ids)
+  force(id_col)
+
+  function(df) {
+    if (!(id_col %in% names(df))) {
+      message(sprintf("Column '%s' not found; skipping.", id_col))
+      return(df)
+    }
+    ids <- normalize_chr(df[[id_col]])
+    keep <- ids %in% allowed_ids
+    df[keep, , drop = FALSE]
   }
 }
 
