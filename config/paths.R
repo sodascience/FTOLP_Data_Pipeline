@@ -14,9 +14,8 @@ DIR_MERGED <- file.path(PROJECT_ROOT, "merged")
 # Dataset groupings
 DATASETS <- list(
   br_pt = c("br_pilot", "BR_PT_277273", "BR_PT_999625"),
-  ch = c("CH_277273", "CH_999625"),
+  ch = c("CH_277273"),
   us = c("US_216254", "US_868141"),
-  ch_us = c("CH_277273", "CH_999625", "US_216254", "US_868141"),
   ch_us_10_min = c("CH_277273", "US_868141"),
   pilot = c("br_pilot"),
   first_stage = c(
