@@ -311,6 +311,12 @@ remove_zigzag <- mk_group(
       datasets = first_stage_br_pt
     ),
 
+    mk_step(
+      "HS",
+      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # Big Five personality (BR/PT only)
+      datasets = first_stage_br_pt
+    ),
+
     # China specific scales
     mk_step(
       "CAAS",
