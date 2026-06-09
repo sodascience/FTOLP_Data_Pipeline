@@ -313,7 +313,7 @@ remove_zigzag <- mk_group(
 
     mk_step(
       "HS",
-      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # Big Five personality (BR/PT only)
+      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # HS scale (BR/PT only)
       datasets = first_stage_br_pt
     ),
 
