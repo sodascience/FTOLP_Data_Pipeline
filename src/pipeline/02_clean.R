@@ -364,7 +364,7 @@ remove_zigzag <- mk_group(
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# SCALE PATTERNS: Define regex patterns for CH/US atypical pattern checks
+# SCALE PATTERNS: Define regex patterns for atypical pattern checks
 # Used by Mahalanobis + Guttman filters to identify scale columns
 scale_patterns_ch_us <- list(
   FTOS = "^FTOS_v1_\\d+$",           # First-stage FTOS items
@@ -380,19 +380,36 @@ scale_patterns_ch_us <- list(
   GRIT = "^GRIT_\\d+$"               # Grit Scale (US only)
 )
 
+scale_patterns_it_br_sl <- list(
+  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BR_PT_277273, SL_277273)
+  FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_auto)
+  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BR_PT_277273, SL_277273)
+  LPS_v2  = "^LPS_v2_\\d+$",         # Second-stage LPS (IT_auto)
+  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BR_PT_277273, IT_auto)
+  AS      = "^AS_\\d+$",             # Authenticity Scale (BR_PT_277273, IT_auto)
+  IPIP    = "^IPIP_\\d+$",           # Big Five personality (BR_PT_277273 only)
+  HS      = "^HS_\\d+$",             # HS scale (BR_PT_277273 only)
+  DASS    = "^DASS_\\d+$",           # Depression Anxiety Stress Scales (SL_277273 only)
+  IT      = "^IT_\\d+$",             # Italian Time Perspective (IT_277273, IT_auto)
+  DMF     = "^DMF_\\d+$"             # Decision Making Fluency (IT_277273, IT_auto)
+)
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# ATYPICAL RESPONSE PATTERN FILTER (CH/US ONLY) ----
+# ATYPICAL RESPONSE PATTERN FILTER ----
 # PURPOSE: Remove participants with atypical response patterns per scale
 #
-# STRATEGY:
+# CH/US STRATEGY:
 #   - Mahalanobis distance per scale (p < .001)
 #   - Guttman errors per scale (|z| > 2)
 #   - Remove participants flagged in 2+ scales (Mahalanobis and/or Guttman)
 #
-# APPLICATION: Only China and US datasets
+# IT/BR_PT/SL STRATEGY:
+#   - Mahalanobis distance per scale (p < .001 AND M > 4.0)
+#   - Guttman errors per scale (|z| > 2)
+#   - Remove participants flagged in >= 50% of scales they filled in
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 atypical_patterns <- mk_group(
-  "Atypical response patterns (CH/US)",
+  "Atypical response patterns",
   steps = list(
     mk_step(
       "Mahalanobis + Guttman (>=2 scales)",
@@ -403,6 +420,17 @@ atypical_patterns <- mk_group(
         min_scales = 2
       ),
       datasets = c(us, ch)
+    ),
+    mk_step(
+      "Mahalanobis (p<.001 AND M>4.0) + Guttman (>=50% of scales)",
+      step_atypical_patterns(
+        scale_patterns_it_br_sl,
+        md_p = 0.001,
+        md_dist_thresh = 4.0,
+        g_z_thresh = 2,
+        min_scales = 0.5
+      ),
+      datasets = c("IT_277273", "IT_auto", "BR_PT_277273", "SL_277273")
     )
   )
 )
