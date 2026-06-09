@@ -63,8 +63,7 @@ external_us_ids <- external_us_ids[!is.na(external_us_ids)]
 # They allow applying different filters to different subsets of data
 br_pt <- DATASETS$br_pt                    # Brazil & Portugal datasets
 ch <- DATASETS$ch                          # China datasets
-us <- DATASETS$us                          # USA datasets
-ch_us <- DATASETS$ch_us                    # Combined China & USA
+us <- DATASETS$us                          # USA datasets                 
 ch_us_10_min <- DATASETS$ch_us_10_min      # Datasets to filter for <10 min duration
 first_stage <- DATASETS$first_stage        # All first-stage surveys
 first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
@@ -195,13 +194,13 @@ constant_and_binary <- mk_group(
     mk_step(
       "MLQ",
       step_constant_answers(col_pattern = "^MLQ_\\d+$"),     # Meaning in Life Questionnaire
-      datasets = c(br_pt, ch_us)                             # BR/PT + China + US
+      datasets = c(br_pt, ch, us)                             # BR/PT + China + US
     ),
     
     mk_step(
       "AS",
       step_constant_answers(col_pattern = "^AS_\\d+$"),      # Authenticity Scale
-      datasets = c(br_pt, ch_us)                             # BR/PT + China + US
+      datasets = c(br_pt, ch, us)                             # BR/PT + China + US
     ),
     
     # US-specific scale
@@ -404,7 +403,7 @@ atypical_patterns <- mk_group(
         g_z_thresh = 2,
         min_scales = 2
       ),
-      datasets = ch_us
+      datasets = c(us, ch)
     )
   )
 )
