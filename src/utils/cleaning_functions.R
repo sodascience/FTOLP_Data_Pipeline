@@ -308,14 +308,20 @@ step_mahalanobis <- function(scale_patterns, fail_threshold = 0.5) {
 
 step_atypical_patterns <- function(scale_patterns,
                                    md_p = 0.001,
+                                   md_dist_thresh = NULL,
                                    g_z_thresh = 2,
                                    min_scales = 2) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
   if (!is.numeric(min_scales) || length(min_scales) != 1L ||
-    is.na(min_scales) || min_scales < 1) {
-    stop("`min_scales` must be a single integer >= 1.")
+    is.na(min_scales) || min_scales <= 0) {
+    stop("`min_scales` must be a positive number (ratio 0 < x < 1, or integer count >= 1).")
+  }
+  if (!is.null(md_dist_thresh) && (
+    !is.numeric(md_dist_thresh) || length(md_dist_thresh) != 1L || is.na(md_dist_thresh)
+  )) {
+    stop("`md_dist_thresh` must be a single numeric value or NULL.")
   }
 
   function(df) {
@@ -324,6 +330,7 @@ step_atypical_patterns <- function(scale_patterns,
     }
 
     scale_flags <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
       cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
@@ -336,6 +343,8 @@ step_atypical_patterns <- function(scale_patterns,
       if (sum(row_complete) < 2) {
         next
       }
+
+      applied_flags[[scale_name]] <- as.integer(row_complete)
 
       md_outlier <- rep(0L, nrow(df))
       md_res <- tryCatch(
@@ -350,6 +359,9 @@ step_atypical_patterns <- function(scale_patterns,
       if (!is.null(md_res)) {
         if ("is.outlier" %in% names(md_res)) {
           md_vals <- as.integer(md_res$is.outlier)
+          if (!is.null(md_dist_thresh) && "mahal.dist" %in% names(md_res)) {
+            md_vals <- as.integer(md_vals == 1L & md_res$mahal.dist > md_dist_thresh)
+          }
         } else if ("p" %in% names(md_res)) {
           md_vals <- as.integer(md_res$p < md_p)
         } else {
@@ -402,7 +414,15 @@ step_atypical_patterns <- function(scale_patterns,
     }
 
     total_flags <- rowSums(scale_flags == 1L, na.rm = TRUE)
-    keep_rows <- total_flags < min_scales
+    if (min_scales < 1) {
+      # Ratio mode: remove if flagged in >= min_scales proportion of filled-in scales
+      total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+      flag_ratio <- ifelse(total_applied > 0, total_flags / total_applied, 0)
+      keep_rows <- total_applied == 0 | flag_ratio < min_scales
+    } else {
+      # Count mode: remove if flagged in >= min_scales scales
+      keep_rows <- total_flags < min_scales
+    }
     df[keep_rows, , drop = FALSE]
   }
 }
