@@ -348,24 +348,14 @@ step_atypical_patterns <- function(scale_patterns,
 
       md_outlier <- rep(0L, nrow(df))
       md_res <- tryCatch(
-        rstatix::mahalanobis_distance(
-          block[row_complete, , drop = FALSE],
-          alpha = md_p
-        ),
-        error = function(e) {
-          NULL
-        }
+        rstatix::mahalanobis_distance(block[row_complete, , drop = FALSE]),
+        error = function(e) { NULL }
       )
-      if (!is.null(md_res)) {
-        if ("is.outlier" %in% names(md_res)) {
-          md_vals <- as.integer(md_res$is.outlier)
-          if (!is.null(md_dist_thresh) && "mahal.dist" %in% names(md_res)) {
-            md_vals <- as.integer(md_vals == 1L & md_res$mahal.dist > md_dist_thresh)
-          }
-        } else if ("p" %in% names(md_res)) {
-          md_vals <- as.integer(md_res$p < md_p)
-        } else {
-          md_vals <- rep(0L, sum(row_complete))
+      if (!is.null(md_res) && "mahal.dist" %in% names(md_res)) {
+        p_vals <- pchisq(md_res$mahal.dist, df = ncol(block), lower.tail = FALSE)
+        md_vals <- as.integer(p_vals < md_p)
+        if (!is.null(md_dist_thresh)) {
+          md_vals <- as.integer(md_vals == 1L & md_res$mahal.dist > md_dist_thresh)
         }
         if (length(md_vals) != sum(row_complete)) {
           md_vals <- rep(0L, sum(row_complete))
@@ -575,6 +565,41 @@ step_keep_ids <- function(allowed_ids, id_col = "id") {
     }
     ids <- normalize_chr(df[[id_col]])
     keep <- ids %in% allowed_ids
+    df[keep, , drop = FALSE]
+  }
+}
+
+step_keep_by_composite_id <- function(external_df, id_cols) {
+  force(external_df)
+  force(id_cols)
+
+  build_key <- function(df) {
+    parts <- lapply(id_cols, function(col) {
+      if (!(col %in% names(df))) return(rep(NA_character_, nrow(df)))
+      toupper(normalize_chr(df[[col]]))
+    })
+    has_na <- Reduce("|", lapply(parts, is.na))
+    key <- do.call(paste, c(parts, list(sep = "_")))
+    key[has_na] <- NA_character_
+    key
+  }
+
+  valid_ext_keys <- unique(build_key(external_df))
+  valid_ext_keys <- valid_ext_keys[!is.na(valid_ext_keys)]
+
+  function(df) {
+    int_keys <- build_key(df)
+
+    dup_keys <- unique(int_keys[!is.na(int_keys) & duplicated(int_keys)])
+    if (length(dup_keys) > 0) {
+      message(sprintf(
+        "[US external check] %d duplicate composite key(s) found — manual review needed: %s",
+        length(dup_keys),
+        paste(dup_keys, collapse = ", ")
+      ))
+    }
+
+    keep <- !is.na(int_keys) & int_keys %in% valid_ext_keys
     df[keep, , drop = FALSE]
   }
 }
