@@ -67,8 +67,7 @@ us <- DATASETS$us                          # USA datasets
 ch_us_10_min <- DATASETS$ch_us_10_min      # Datasets to filter for <10 min duration
 first_stage <- DATASETS$first_stage        # All first-stage surveys
 first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
-first_stage_ch <- DATASETS$first_stage_ch  # China first-stage
-to_remove <- DATASETS$to_remove            # Datasets to exclude from cleaning (e.g., removed datasets)
+datasets_to_remove <- DATASETS$datasets_to_remove            # Datasets to exclude from cleaning (e.g., removed datasets)
 
 # Get list of all split SPSS files to clean including files in subfolders
 file_list <- list.files(
@@ -78,10 +77,10 @@ file_list <- list.files(
   recursive = TRUE                   # Include subdirectories
 )
 
-# Update list of datasets to clean, excluding any in the "to_remove" list
+# Update list of datasets to clean, excluding any in the "datasets_to_remove" list
 updated_file_list <- file_list %>%
   set_names(basename(.) %>% file_path_sans_ext()) %>%  # Name list by dataset name (without .sav)
-  keep(~ !any(str_detect(., to_remove)))               # Exclude datasets in "to_remove" list
+  keep(~ !any(str_detect(., datasets_to_remove)))               # Exclude datasets in "datasets_to_remove" list
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
@@ -294,13 +293,13 @@ remove_zigzag <- mk_group(
     mk_step(
       "MLQ",
       step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
-      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_auto")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, ch, "IT_auto")  # BR/PT + US + CH + IT
     ),
     
     mk_step(
       "AS",
       step_detect_zigzag(col_pattern = "^AS_\\d+$"),        # Authenticity Scale
-      datasets = c(first_stage_br_pt, us, first_stage_ch, "IT_auto")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, ch, "IT_auto")  # BR/PT + US + CH + IT
     ),
 
     # Brazil/Portugal specific scales
@@ -320,19 +319,19 @@ remove_zigzag <- mk_group(
     mk_step(
       "CAAS",
       step_detect_zigzag(col_pattern = "^CAAS_\\d+$"),      # Career Adapt-Abilities Scale (complete version)
-      datasets = first_stage_ch
+      datasets = ch
     ),
     
     mk_step(
       "ESS",
       step_detect_zigzag(col_pattern = "^ES_\\d+$"),        # Existential Scale
-      datasets = first_stage_ch
+      datasets = ch
     ),
     
     mk_step(
       "ESW",
       step_detect_zigzag(col_pattern = "^ESW_PS\\d+$"),     # Existential Scale - Work
-      datasets = first_stage_ch
+      datasets = ch
     ),
 
     # US specific scale
