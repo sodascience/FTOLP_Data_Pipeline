@@ -55,8 +55,6 @@ source(here::here("src", "utils", "cleaning_functions.R"))
 # Load external US inclusion list for extra check
 external_us_file <- file.path(DIR_EXTERNAL, "DataSet US - Extra Check.sav")
 external_us_df <- read_sav(external_us_file)
-external_us_ids <- unique(normalize_chr(external_us_df$id))
-external_us_ids <- external_us_ids[!is.na(external_us_ids)]
 
 # DATASET GROUPINGS: Define which datasets get which filters
 # These groupings are loaded from config/paths.R
@@ -437,9 +435,17 @@ atypical_patterns <- mk_group(
 
 # US EXTERNAL CHECK FILTER ----
 # PURPOSE: Remove US participants not included in the external inclusion dataset
+#
+# STRATEGY: Match participants using a composite key from personal identifiers
+#   (IdCode_1, IdCode_2, Id_Code3) and age. These answers are highly personal
+#   (letters of names, mother's initial, birth month) so collisions are
+#   extremely unlikely. Duplicate keys trigger a warning for manual review.
 us_external_filter <- list(
   name = "Drop US participants not in external dataset",
-  fn = step_keep_ids(external_us_ids, id_col = "id"),
+  fn = step_keep_by_composite_id(
+    external_us_df,
+    id_cols = c("IdCode_1", "IdCode_2", "Id_Code3", "age")
+  ),
   datasets = us
 )
 
