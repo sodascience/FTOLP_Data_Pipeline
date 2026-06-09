@@ -12,7 +12,7 @@ source(here::here("config", "paths.R"))
 # Note: Using absolute paths from config
 
 # Dataset grouping
-first_stage_df <- DATASETS$first_stage_df
+duration_analysis_datasets <- DATASETS$first_stage
 
 
 parse_time <- function(x, tz = "UTC") {
@@ -130,7 +130,7 @@ analyze_duration_histograms <- function(df, dfname, unit = c("mins", "secs", "ho
   list(plot = p, outlier_summary = outlier_summary, data = df3)
 }
 
-for (f in first_stage_df) {
+for (f in duration_analysis_datasets) {
   # f<- "BR_PT_277273_clean.sav"
   df <- read_sav(paste0(f, "_clean.sav"))
   res <- analyze_duration_histograms(df, f, unit = "mins", save_dir = "duration_plots")
