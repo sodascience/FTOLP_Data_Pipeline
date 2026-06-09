@@ -463,6 +463,45 @@ for (df_name in names(dfs)) {
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# PRE-MERGE LABEL NORMALISATION ----
+# Prevent bind_rows() warnings caused by conflicting value labels:
+#
+#   1. Numeric scale items (FTOS_v2, LPS_v2): strip language-specific scale-point
+#      labels (e.g. "disagree"=1 vs "en désaccord"=1), keeping only the
+#      990/991/999 missing-value labels that are already uniform.
+#
+#   2. Categorical columns (Gender_v2, etc.): unconditionally convert to character
+#      so bind_rows() never sees conflicting labelled-integer vectors.  The type-
+#      standardisation loop above only fires on type conflicts, not label conflicts,
+#      so labelled-integer columns with different language labels slip through.
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+missing_only_labels <- c("by_design" = 990, "technical_error" = 991, "missing" = 999)
+
+dfs <- lapply(dfs, function(df) {
+  # 1. Strip scale-point labels from numeric scale columns
+  for (col in intersect(numerical_cols, names(df))) {
+    col_data <- df[[col]]
+    if (is.labelled(col_data)) {
+      na_vals <- attr(col_data, "na_values")
+      df[[col]] <- labelled_spss(
+        x          = unclass(col_data),
+        na_values  = if (is.null(na_vals)) all_na_values else na_vals,
+        labels     = missing_only_labels
+      )
+    }
+  }
+  # 2. Convert categorical columns to plain character
+  for (col in intersect(categorical_cols, names(df))) {
+    col_data <- df[[col]]
+    if (!is.character(col_data)) {
+      df[[col]] <- if (is.labelled(col_data)) as.character(as_factor(col_data))
+                   else                        as.character(col_data)
+    }
+  }
+  df
+})
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # DEFINE FUNCTION: label_merge_NAs()
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PURPOSE: Label padding NAs created by bind_rows() merge
