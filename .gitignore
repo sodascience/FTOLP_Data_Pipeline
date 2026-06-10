@@ -51,3 +51,6 @@ docs/*.md
 
 # logs
 logs/
+
+# archived files
+archive/
