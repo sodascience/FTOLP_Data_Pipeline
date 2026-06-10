@@ -444,7 +444,7 @@ us_external_filter <- list(
   name = "Drop US participants not in external dataset",
   fn = step_keep_by_composite_id(
     external_us_df,
-    id_cols = c("IdCode_1", "IdCode_2", "Id_Code3", "age")
+    id_cols = c("IdCode_1", "IdCode_2", "IdCode_3", "Age")
   ),
   datasets = us
 )
