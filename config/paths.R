@@ -1,15 +1,15 @@
 # Configuration file for directory paths
 # Modify these paths according to your local setup
 
-# Base project directory
-PROJECT_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/ftolp_data"
+# Base data directory
+DATA_ROOT <- "~/Library/CloudStorage/Nextcloud-6161138@soliscom.uu.nl@surfdrive.surf.nl/ftolp_data"
 
 # Data directories
-DIR_RAW <- file.path(PROJECT_ROOT, "raw")
-DIR_SPLIT <- file.path(PROJECT_ROOT, "split")
-DIR_CLEAN <- file.path(PROJECT_ROOT, "clean")
-DIR_EXTERNAL <- file.path(PROJECT_ROOT, "external")
-DIR_MERGED <- file.path(PROJECT_ROOT, "merged")
+DIR_RAW <- file.path(DATA_ROOT, "raw")
+DIR_SPLIT <- file.path(DATA_ROOT, "split")
+DIR_CLEAN <- file.path(DATA_ROOT, "clean")
+DIR_EXTERNAL <- file.path(DATA_ROOT, "external")
+DIR_MERGED <- file.path(DATA_ROOT, "merged")
 
 # Dataset groupings
 DATASETS <- list(
