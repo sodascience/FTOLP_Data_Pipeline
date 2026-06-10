@@ -612,8 +612,9 @@ for (f in updated_file_list) {
 # Combine all individual dataset summaries into one Excel file
 # Shows initial N, final N, and removals at each step for every dataset
 summary_all <- bind_rows(all_summaries)
-write_xlsx(summary_all, file.path(DIR_CLEAN, "clean_summary.xlsx"))
-message("Cleaning summary saved to: clean_summary.xlsx")
+summary_filename <- sprintf("clean_summary_%s.xlsx", format(Sys.time(), "%Y%m%d_%H%M%S"))
+write_xlsx(summary_all, file.path(DIR_CLEAN, summary_filename))
+message("Cleaning summary saved to: ", summary_filename)
 
 # WRITE EXCLUDED US PARTICIPANTS (EXTERNAL CHECK) ----
 if (length(excluded_us_external) > 0) {
