@@ -402,9 +402,10 @@ scale_patterns_it_br_sl <- list(
 #   - Remove participants flagged in 2+ scales (Mahalanobis and/or Guttman)
 #
 # IT/BR_PT/SL STRATEGY:
-#   - Mahalanobis distance per scale (p < .001 AND M > 4.0)
-#   - Guttman errors per scale (|z| > 2)
-#   - Remove participants flagged in >= 50% of scales they filled in
+#   - Mahalanobis distance per scale (p < .001 AND M/df > 4.0); scales with
+#     ≤ 50% missing items are included using available items only
+#   - Guttman errors per scale (|z| > 2); complete responses only
+#   - Remove participants flagged in > 50% of filled-in scales AND >= 2 scales
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 atypical_patterns <- mk_group(
   "Atypical response patterns",
@@ -420,13 +421,15 @@ atypical_patterns <- mk_group(
       datasets = c(us, ch)
     ),
     mk_step(
-      "Mahalanobis (p<.001 AND M>4.0) + Guttman (>=50% of scales)",
+      "Mahalanobis (p<.001 AND M/df>4.0) + Guttman (>50% AND >=2 scales)",
       step_atypical_patterns(
         scale_patterns_it_br_sl,
         md_p = 0.001,
-        md_dist_thresh = 4.0,
+        md_ratio_thresh = 4.0,
         g_z_thresh = 2,
-        min_scales = 0.5
+        min_scales = 0.5,
+        min_flags = 2,
+        use_partial = FALSE
       ),
       datasets = c("IT_277273", "IT_auto", "BR_PT_277273", "SL_277273")
     )

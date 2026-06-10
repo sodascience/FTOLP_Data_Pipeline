@@ -308,9 +308,11 @@ step_mahalanobis <- function(scale_patterns, fail_threshold = 0.5) {
 
 step_atypical_patterns <- function(scale_patterns,
                                    md_p = 0.001,
-                                   md_dist_thresh = NULL,
+                                   md_ratio_thresh = NULL,
                                    g_z_thresh = 2,
-                                   min_scales = 2) {
+                                   min_scales = 2,
+                                   min_flags = NULL,
+                                   use_partial = FALSE) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
@@ -318,10 +320,19 @@ step_atypical_patterns <- function(scale_patterns,
     is.na(min_scales) || min_scales <= 0) {
     stop("`min_scales` must be a positive number (ratio 0 < x < 1, or integer count >= 1).")
   }
-  if (!is.null(md_dist_thresh) && (
-    !is.numeric(md_dist_thresh) || length(md_dist_thresh) != 1L || is.na(md_dist_thresh)
+  if (!is.null(md_ratio_thresh) && (
+    !is.numeric(md_ratio_thresh) || length(md_ratio_thresh) != 1L || is.na(md_ratio_thresh)
   )) {
-    stop("`md_dist_thresh` must be a single numeric value or NULL.")
+    stop("`md_ratio_thresh` must be a single numeric value or NULL.")
+  }
+  if (!is.null(min_flags) && (
+    !is.numeric(min_flags) || length(min_flags) != 1L ||
+    is.na(min_flags) || min_flags < 1 || min_flags != floor(min_flags)
+  )) {
+    stop("`min_flags` must be a positive integer or NULL.")
+  }
+  if (!is.logical(use_partial) || length(use_partial) != 1L || is.na(use_partial)) {
+    stop("`use_partial` must be TRUE or FALSE.")
   }
 
   function(df) {
@@ -329,7 +340,7 @@ step_atypical_patterns <- function(scale_patterns,
       return(df)
     }
 
-    scale_flags <- data.frame(row.names = seq_len(nrow(df)))
+    scale_flags   <- data.frame(row.names = seq_len(nrow(df)))
     applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
@@ -338,62 +349,107 @@ step_atypical_patterns <- function(scale_patterns,
         next
       }
 
-      block <- as.data.frame(lapply(df[cols], to_numeric), check.names = FALSE)
-      row_complete <- rowSums(!is.na(block)) == ncol(block)
-      if (sum(row_complete) < 2) {
+      block   <- as.data.frame(lapply(df[cols], to_numeric), check.names = FALSE)
+      n_items <- ncol(block)
+      n_pres  <- rowSums(!is.na(block))
+
+      row_complete <- n_pres == n_items
+      # When use_partial = TRUE, include scales where ≤ 50% of items are missing
+      row_usable   <- if (use_partial) (n_pres / n_items) >= 0.5 else row_complete
+
+      if (sum(row_usable) < 2) {
         next
       }
 
-      applied_flags[[scale_name]] <- as.integer(row_complete)
+      applied_flags[[scale_name]] <- as.integer(row_usable)
 
+      # ---- Mahalanobis ----
       md_outlier <- rep(0L, nrow(df))
-      md_res <- tryCatch(
-        rstatix::mahalanobis_distance(block[row_complete, , drop = FALSE]),
-        error = function(e) { NULL }
-      )
-      if (!is.null(md_res) && "mahal.dist" %in% names(md_res)) {
-        p_vals <- pchisq(md_res$mahal.dist, df = ncol(block), lower.tail = FALSE)
-        md_vals <- as.integer(p_vals < md_p)
-        if (!is.null(md_dist_thresh)) {
-          md_vals <- as.integer(md_vals == 1L & md_res$mahal.dist > md_dist_thresh)
+
+      # Batch: fully complete rows
+      if (sum(row_complete) >= 2) {
+        md_res <- tryCatch(
+          rstatix::mahalanobis_distance(block[row_complete, , drop = FALSE]),
+          error = function(e) { NULL }
+        )
+        if (!is.null(md_res) && "mahal.dist" %in% names(md_res)) {
+          p_vals  <- pchisq(md_res$mahal.dist, df = n_items, lower.tail = FALSE)
+          md_vals <- as.integer(p_vals < md_p)
+          if (!is.null(md_ratio_thresh)) {
+            md_vals <- as.integer(
+              md_vals == 1L & (md_res$mahal.dist / n_items) > md_ratio_thresh
+            )
+          }
+          if (length(md_vals) == sum(row_complete)) {
+            md_outlier[row_complete] <- md_vals
+          }
         }
-        if (length(md_vals) != sum(row_complete)) {
-          md_vals <- rep(0L, sum(row_complete))
-        }
-        md_outlier[row_complete] <- md_vals
       }
 
+      # Per-row: partial responders (only when use_partial = TRUE)
+      # Covariance estimated from rows that have all of this participant's items;
+      # df for p-value and M/df ratio is the actual number of answered items.
+      for (i in if (use_partial) which(row_usable & !row_complete) else integer(0)) {
+        avail   <- which(!is.na(block[i, ]))
+        n_avail <- length(avail)
+        sub_blk <- block[, avail, drop = FALSE]
+        ref_rows <- rowSums(!is.na(sub_blk)) == n_avail
+        if (sum(ref_rows) <= n_avail) next   # need more obs than vars
+
+        ref_mat <- as.matrix(sub_blk[ref_rows, , drop = FALSE])
+        cov_mat <- tryCatch(cov(ref_mat), error = function(e) NULL)
+        if (is.null(cov_mat)) next
+
+        d_i <- tryCatch(
+          as.numeric(mahalanobis(
+            matrix(as.numeric(block[i, avail]), nrow = 1),
+            center = colMeans(ref_mat),
+            cov    = cov_mat
+          )),
+          error = function(e) NA_real_
+        )
+        if (is.na(d_i) || !is.finite(d_i)) next
+
+        p_i   <- pchisq(d_i, df = n_avail, lower.tail = FALSE)
+        is_md <- p_i < md_p
+        if (!is.null(md_ratio_thresh)) {
+          is_md <- is_md & (d_i / n_avail) > md_ratio_thresh
+        }
+        md_outlier[i] <- as.integer(is_md)
+      }
+
+      # ---- Guttman (complete rows only — PerFit requires no missing values) ----
       g_outlier <- rep(0L, nrow(df))
-      mat <- block[row_complete, , drop = FALSE]
-      rng <- range(unlist(mat), na.rm = TRUE)
-      if (all(is.finite(rng))) {
-        v_min <- rng[1]
-        v_max <- rng[2]
-        Ncat <- as.integer(v_max - v_min + 1L)
-        if (is.finite(Ncat) && Ncat >= 2L) {
-          mat0 <- as.data.frame(lapply(mat, function(v) {
-            as.integer(round(v - v_min))
-          }), check.names = FALSE)
-          gfit <- tryCatch(
-            PerFit::Gpoly(as.matrix(mat0), Ncat = Ncat),
-            error = function(e) {
-              NULL
+      if (sum(row_complete) >= 2) {
+        mat <- block[row_complete, , drop = FALSE]
+        rng <- range(unlist(mat), na.rm = TRUE)
+        if (all(is.finite(rng))) {
+          v_min <- rng[1]
+          v_max <- rng[2]
+          Ncat  <- as.integer(v_max - v_min + 1L)
+          if (is.finite(Ncat) && Ncat >= 2L) {
+            mat0 <- as.data.frame(
+              lapply(mat, function(v) as.integer(round(v - v_min))),
+              check.names = FALSE
+            )
+            gfit <- tryCatch(
+              PerFit::Gpoly(as.matrix(mat0), Ncat = Ncat),
+              error = function(e) NULL
+            )
+            if (!is.null(gfit)) {
+              g   <- as.numeric(gfit[["PFscores"]][["PFscores"]])
+              z   <- as.numeric(scale(g))
+              gut_vals <- ifelse(is.na(z) | abs(z) <= g_z_thresh, 0L, 1L)
+              if (length(gut_vals) == sum(row_complete)) {
+                g_outlier[row_complete] <- gut_vals
+              }
             }
-          )
-          if (!is.null(gfit)) {
-            g <- as.numeric(gfit[["PFscores"]][["PFscores"]])
-            z <- as.numeric(scale(g))
-            gut_vals <- ifelse(is.na(z) | abs(z) <= g_z_thresh, 0L, 1L)
-            if (length(gut_vals) != sum(row_complete)) {
-              gut_vals <- rep(0L, sum(row_complete))
-            }
-            g_outlier[row_complete] <- gut_vals
           }
         }
       }
 
       scale_flags[[scale_name]] <- ifelse(
-        row_complete & ((md_outlier == 1L) | (g_outlier == 1L)),
+        row_usable & ((md_outlier == 1L) | (g_outlier == 1L)),
         1L,
         0L
       )
@@ -404,15 +460,22 @@ step_atypical_patterns <- function(scale_patterns,
     }
 
     total_flags <- rowSums(scale_flags == 1L, na.rm = TRUE)
+
     if (min_scales < 1) {
-      # Ratio mode: remove if flagged in >= min_scales proportion of filled-in scales
+      # Ratio mode: remove if flagged in > min_scales proportion of filled-in scales
       total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
-      flag_ratio <- ifelse(total_applied > 0, total_flags / total_applied, 0)
-      keep_rows <- total_applied == 0 | flag_ratio < min_scales
+      flag_ratio    <- ifelse(total_applied > 0, total_flags / total_applied, 0)
+      remove_rows   <- flag_ratio > min_scales
+      if (!is.null(min_flags)) {
+        # Both conditions must hold: ratio exceeded AND minimum count reached
+        remove_rows <- remove_rows & total_flags >= min_flags
+      }
+      keep_rows <- total_applied == 0 | !remove_rows
     } else {
       # Count mode: remove if flagged in >= min_scales scales
       keep_rows <- total_flags < min_scales
     }
+
     df[keep_rows, , drop = FALSE]
   }
 }
