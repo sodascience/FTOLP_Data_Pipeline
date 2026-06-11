@@ -312,7 +312,8 @@ step_atypical_patterns <- function(scale_patterns,
                                    g_z_thresh = 2,
                                    min_scales = 2,
                                    min_flags = NULL,
-                                   use_partial = FALSE) {
+                                   use_partial = FALSE,
+                                   scale_flag_logic = "OR") {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
@@ -334,6 +335,7 @@ step_atypical_patterns <- function(scale_patterns,
   if (!is.logical(use_partial) || length(use_partial) != 1L || is.na(use_partial)) {
     stop("`use_partial` must be TRUE or FALSE.")
   }
+  scale_flag_logic <- match.arg(toupper(scale_flag_logic), c("OR", "AND"))
 
   function(df) {
     if (nrow(df) == 0) {
@@ -448,11 +450,12 @@ step_atypical_patterns <- function(scale_patterns,
         }
       }
 
-      scale_flags[[scale_name]] <- ifelse(
-        row_usable & ((md_outlier == 1L) | (g_outlier == 1L)),
-        1L,
-        0L
-      )
+      combined_flag <- if (scale_flag_logic == "AND") {
+        (md_outlier == 1L) & (g_outlier == 1L)
+      } else {
+        (md_outlier == 1L) | (g_outlier == 1L)
+      }
+      scale_flags[[scale_name]] <- ifelse(row_usable & combined_flag, 1L, 0L)
     }
 
     if (ncol(scale_flags) == 0L) {
