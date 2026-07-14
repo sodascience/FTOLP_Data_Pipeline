@@ -60,9 +60,9 @@ external_us_df <- read_sav(external_us_file)
 # These groupings are loaded from config/paths.R
 # They allow applying different filters to different subsets of data
 br_pt <- DATASETS$br_pt                    # Brazil & Portugal datasets
-ch <- DATASETS$ch                          # China datasets
+cn <- DATASETS$cn                          # China datasets
 us <- DATASETS$us                          # USA datasets                 
-ch_us_10_min <- DATASETS$ch_us_10_min      # Datasets to filter for <10 min duration
+cn_us_10_min <- DATASETS$cn_us_10_min      # Datasets to filter for <10 min duration
 first_stage <- DATASETS$first_stage        # All first-stage surveys
 first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
 datasets_to_remove <- DATASETS$datasets_to_remove            # Datasets to exclude from cleaning (e.g., removed datasets)
@@ -112,7 +112,7 @@ filter_na <- mk_group("Missing response",
     mk_step(
       "FTOS_v2 or LPS missing",
       step_drop_na_block("^(FTOS_v2_\\d+|LPS_v2_\\d+)$"),  # Regex: FTOS_v2_1, LPS_v2_1, etc.
-      exclude = c(br_pt, "IT_auto")      # Skip BR/PT and Italian auto
+      exclude = c(br_pt, "IT_AUTO")      # Skip BR/PT and Italian auto
     ),
     
     # Check 3: Pilot FTOS
@@ -154,7 +154,7 @@ constant_and_binary <- mk_group(
     mk_step(
       "FTOS_v2", 
       step_constant_answers("^FTOS_v2_\\d+$"),    # Second-stage FTOS
-      datasets = c("IT_auto")                    # Only Italian auto dataset
+      datasets = c("IT_AUTO")                    # Only Italian auto dataset
     ),
     
     mk_step(
@@ -184,20 +184,20 @@ constant_and_binary <- mk_group(
     mk_step(
       "LS",
       step_constant_answers(col_pattern = "^LS_BRS\\d+$"),   # Life Satisfaction - Brief Resilience Scale
-      datasets = ch                                          # Only Chinese datasets
+      datasets = cn                                          # Only Chinese datasets
     ),
     
     # Multi-country scales (BR/PT, China, US)
     mk_step(
       "MLQ",
       step_constant_answers(col_pattern = "^MLQ_\\d+$"),     # Meaning in Life Questionnaire
-      datasets = c(br_pt, ch, us)                             # BR/PT + China + US
+      datasets = c(br_pt, cn, us)                             # BR/PT + China + US
     ),
     
     mk_step(
       "AS",
       step_constant_answers(col_pattern = "^AS_\\d+$"),      # Authenticity Scale
-      datasets = c(br_pt, ch, us)                             # BR/PT + China + US
+      datasets = c(br_pt, cn, us)                             # BR/PT + China + US
     ),
     
     # US-specific scale
@@ -272,7 +272,7 @@ remove_zigzag <- mk_group(
     mk_step(
       "FTOS2",
       step_detect_zigzag(col_pattern = "^FTOS_v2_\\d+$"),   # Second-stage FTOS
-      datasets = c("IT_auto")                              # Italian auto only
+      datasets = c("IT_AUTO")                              # Italian auto only
     ),
     
     mk_step(
@@ -284,20 +284,20 @@ remove_zigzag <- mk_group(
     mk_step(
       "LPS2",
       step_detect_zigzag(col_pattern = "^LPS_v2_\\d+$"),    # Second-stage LPS
-      datasets = c("IT_auto")                              # Italian auto only
+      datasets = c("IT_AUTO")                              # Italian auto only
     ),
 
     # Multi-country scales (BR/PT, US, China)
     mk_step(
       "MLQ",
       step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
-      datasets = c(first_stage_br_pt, us, ch, "IT_auto")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, cn, "IT_AUTO")  # BR/PT + US + CN + IT
     ),
     
     mk_step(
       "AS",
       step_detect_zigzag(col_pattern = "^AS_\\d+$"),        # Authenticity Scale
-      datasets = c(first_stage_br_pt, us, ch, "IT_auto")  # BR/PT + US + CH + IT
+      datasets = c(first_stage_br_pt, us, cn, "IT_AUTO")  # BR/PT + US + CN + IT
     ),
 
     # Brazil/Portugal specific scales
@@ -317,19 +317,19 @@ remove_zigzag <- mk_group(
     mk_step(
       "CAAS",
       step_detect_zigzag(col_pattern = "^CAAS_\\d+$"),      # Career Adapt-Abilities Scale (complete version)
-      datasets = ch
+      datasets = cn
     ),
     
     mk_step(
       "ESS",
       step_detect_zigzag(col_pattern = "^ES_\\d+$"),        # Existential Scale
-      datasets = ch
+      datasets = cn
     ),
     
     mk_step(
       "ESW",
       step_detect_zigzag(col_pattern = "^ESW_PS\\d+$"),     # Existential Scale - Work
-      datasets = ch
+      datasets = cn
     ),
 
     # US specific scale
@@ -343,20 +343,20 @@ remove_zigzag <- mk_group(
     mk_step(
       "DASS",
       step_detect_zigzag(col_pattern = "^DASS_\\d+$"),      # Depression Anxiety Stress Scales
-      datasets = c("SL_277273")                             # Slovenia only
+      datasets = c("SI_277273")                             # Slovenia only
     ),
 
     # Italy specific scales
     mk_step(
       "IT",
       step_detect_zigzag(col_pattern = "^IT_\\d+$"),        # Italian Time Perspective scale
-      datasets = c("IT_277273", "IT_auto")
+      datasets = c("IT_277273", "IT_AUTO")
     ),
     
     mk_step(
       "DMF",
       step_detect_zigzag(col_pattern = "^DMF_\\d+$"),       # Decision Making Fluency
-      datasets = c("IT_277273", "IT_auto")
+      datasets = c("IT_277273", "IT_AUTO")
     )
   )
 )
@@ -379,17 +379,17 @@ scale_patterns_ch_us <- list(
 )
 
 scale_patterns_it_br_sl <- list(
-  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BR_PT_277273, SL_277273)
-  FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_auto)
-  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BR_PT_277273, SL_277273)
-  LPS_v2  = "^LPS_v2_\\d+$",         # Second-stage LPS (IT_auto)
-  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BR_PT_277273, IT_auto)
-  AS      = "^AS_\\d+$",             # Authenticity Scale (BR_PT_277273, IT_auto)
+  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BR_PT_277273, SI_277273)
+  FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_AUTO)
+  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BR_PT_277273, SI_277273)
+  LPS_v2  = "^LPS_v2_\\d+$",         # Second-stage LPS (IT_AUTO)
+  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BR_PT_277273, IT_AUTO)
+  AS      = "^AS_\\d+$",             # Authenticity Scale (BR_PT_277273, IT_AUTO)
   IPIP    = "^IPIP_\\d+$",           # Big Five personality (BR_PT_277273 only)
   HS      = "^HS_\\d+$",             # HS scale (BR_PT_277273 only)
-  DASS    = "^DASS_\\d+$",           # Depression Anxiety Stress Scales (SL_277273 only)
-  IT      = "^IT_\\d+$",             # Italian Time Perspective (IT_277273, IT_auto)
-  DMF     = "^DMF_\\d+$"             # Decision Making Fluency (IT_277273, IT_auto)
+  DASS    = "^DASS_\\d+$",           # Depression Anxiety Stress Scales (SI_277273 only)
+  IT      = "^IT_\\d+$",             # Italian Time Perspective (IT_277273, IT_AUTO)
+  DMF     = "^DMF_\\d+$"             # Decision Making Fluency (IT_277273, IT_AUTO)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -419,7 +419,7 @@ atypical_patterns <- mk_group(
         min_scales = 2,
         scale_flag_logic = "OR"
       ),
-      datasets = c(us, ch)
+      datasets = c(us, cn)
     ),
     mk_step(
       "Mahalanobis (p<.001 AND M/df>4.0) + Guttman (>50% AND >=2 scales)",
@@ -433,7 +433,7 @@ atypical_patterns <- mk_group(
         use_partial = FALSE,
         scale_flag_logic = "OR"
       ),
-      datasets = c("IT_277273", "IT_auto", "BR_PT_277273", "SL_277273")
+      datasets = c("IT_277273", "IT_AUTO", "BR_PT_277273", "SI_277273")
     )
   )
 )
@@ -471,7 +471,7 @@ base_steps <- list(
   list(
     name = "Drop short submitted responses (<10 min)",
     fn = step_filter_min_duration(),
-    datasets = ch_us_10_min                      # Only CH/US datasets with time concern
+    datasets = cn_us_10_min                      # Only CN/US datasets with time concern
   ),
   
   # Zigzag pattern filter
@@ -509,7 +509,7 @@ for (f in updated_file_list) {
       # Load SPSS file
       df <- read_sav(f)
       
-      # Extract filename without extension (e.g., "CH_277273")
+      # Extract filename without extension (e.g., "CN_277273")
       name <- file_path_sans_ext(basename(f))
 
       # Save rows removed by the constant-answer filter for br_pilot only
