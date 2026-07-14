@@ -5,23 +5,26 @@
 #          from processed survey data. Ensures only high-quality responses
 #          proceed to final analysis.
 #
-# INPUTS:  Processed .sav files from DIR_SPLIT (output of 01_split_raw.R)
+# INPUTS:  Processed .sav files from DIR_SPLIT (output of 01_split.R)
 #          - ~40+ country/language-specific datasets
 #          - Each contains raw survey responses with minimal preprocessing
 #
 # OUTPUTS: Cleaned .sav files written to DIR_CLEAN
 #          - [dataset]_clean.sav
-#          - clean_summary.xlsx - Audit trail showing how many responses removed at each step
+#          - clean_summary_<timestamp>.xlsx - Audit trail showing how many responses removed at each step
+#          - removed/BR_PILOT_constant_removed.sav - rows the constant-answer filter dropped for BR_PILOT
+#          - removed/us_external_excluded.sav - US rows dropped by the external inclusion check
 #
-# CLEANING STEPS (8 quality filters applied):
+# CLEANING STEPS (7 filters applied, in this order):
 #   1. Missing Response: Remove rows with missing core scale data (FTOS, LPS)
-#   2. Short Duration: Remove responses submitted too quickly (<10 min for some datasets)
-#   3. Constant Answers: Remove rows where participant gave same answer to all items
-#   4. Zigzag Patterns: Remove alternating response patterns (1-7-1-7-1-7...)
-#   5. Mahalanobis Distance: Remove statistical outliers (multivariate outliers)
-#   6. Guttman Errors: Remove response patterns inconsistent with scale structure
-#   7. Attention Checks: Remove participants who failed attention control items
-#   8. Age Filters: Remove participants outside target age range (US only)
+#   2. Constant Answers: Remove rows where participant gave same answer to all items in a scale
+#   3. Attention Checks: Remove participants who failed embedded attention-check items
+#   4. Short Duration: Remove responses submitted too quickly (<10 min; CN_277273 + US_868141 only)
+#   5. Zigzag Patterns: Remove alternating response patterns (1-7-1-7-1-7...)
+#   6. Atypical Response Patterns: Remove statistical outliers, combining Mahalanobis distance
+#      and Guttman errors per scale (thresholds differ for CN/US vs IT/BR_PT/SI datasets)
+#   7. US External Check: Remove US participants not found in an external inclusion dataset
+#      (matched by composite ID + age)
 #
 # DATASET-SPECIFIC LOGIC:
 #   - Different filters applied to different datasets based on content
@@ -141,7 +144,7 @@ filter_na <- mk_group("Missing response",
 #
 # SCALES CHECKED:
 #   - Core scales: FTOS_v1, FTOS_v2, FTOS_pilot, DGI, LOT
-#   - Country-specific: IPIP (BR/PT), LS (China), MLQ (BR/PT/CH/US), AS (BR/PT/CH/US), GRIT (US)
+#   - Country-specific: IPIP (BR/PT), LS (China), MLQ (BR/PT/CN/US), AS (BR/PT/CN/US), GRIT (US)
 #
 # NOTE: Different datasets have different scales, so filters are targeted
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -251,12 +254,12 @@ check_attention <- mk_group(
 # DETECTION: step_detect_zigzag() identifies systematic alternation in responses
 #
 # SCALES CHECKED: Applied to all major scales, tailored by dataset content
-#   - Core: FTOS (v1, v2, pilot), LPS (v1, v2)
-#   - BR/PT: MLQ, AS, IPIP
+#   - Core: FTOS (v1, v2), LPS (v1, v2)
+#   - BR/PT: MLQ, AS, IPIP, HS
 #   - China: MLQ, AS, CAAS, ESS, ESW
 #   - US: MLQ, AS, GRIT
 #   - Slovenia: DASS
-#   - Italy: IT_IT, DMF
+#   - Italy: IT, DMF
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 remove_zigzag <- mk_group(
@@ -364,21 +367,21 @@ remove_zigzag <- mk_group(
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SCALE PATTERNS: Define regex patterns for atypical pattern checks
 # Used by Mahalanobis + Guttman filters to identify scale columns
-scale_patterns_ch_us <- list(
+scale_patterns_cn_us <- list(
   FTOS = "^FTOS_v1_\\d+$",           # First-stage FTOS items
   LPS = "^LPS_v1_\\d+$",             # First-stage LPS items
   CAAS = "^CAAS_\\d+$",              # Career Adapt-Abilities Scale
   DGI = "^(Psy_)?DGI_?\\d+$",        # DGI scale (with/without Psy_ prefix)
   MLQ = "^MLQ_\\d+$",                # Meaning in Life Questionnaire
   AS = "^AS_\\d+$",                  # Authenticity Scale
-  LS = "^LS_BRS\\d+$",               # Life Satisfaction - Brief Resilience Scale (CH only)
-  ESW = "^ESW_PS\\d+$",              # Existential Scale - Work (CH only)
-  ESS = "^ES_\\d+$",                 # Existential Scale (CH only)
-  FS = "^FS_\\d+$",                  # Flourishing Scale (CH only)
+  LS = "^LS_BRS\\d+$",               # Life Satisfaction - Brief Resilience Scale (CN only)
+  ESW = "^ESW_PS\\d+$",              # Existential Scale - Work (CN only)
+  ESS = "^ES_\\d+$",                 # Existential Scale (CN only)
+  FS = "^FS_\\d+$",                  # Flourishing Scale (CN only)
   GRIT = "^GRIT_\\d+$"               # Grit Scale (US only)
 )
 
-scale_patterns_it_br_sl <- list(
+scale_patterns_it_br_si <- list(
   FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BR_PT_277273, SI_277273)
   FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_AUTO)
   LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BR_PT_277273, SI_277273)
@@ -396,12 +399,12 @@ scale_patterns_it_br_sl <- list(
 # ATYPICAL RESPONSE PATTERN FILTER ----
 # PURPOSE: Remove participants with atypical response patterns per scale
 #
-# CH/US STRATEGY:
+# CN/US STRATEGY:
 #   - Mahalanobis distance per scale (p < .001)
 #   - Guttman errors per scale (|z| > 2)
 #   - Remove participants flagged in 2+ scales (Mahalanobis and/or Guttman)
 #
-# IT/BR_PT/SL STRATEGY:
+# IT/BR_PT/SI STRATEGY:
 #   - Mahalanobis distance per scale (p < .001 AND M/df > 4.0); scales with
 #     ≤ 50% missing items are included using available items only
 #   - Guttman errors per scale (|z| > 2); complete responses only
@@ -413,7 +416,7 @@ atypical_patterns <- mk_group(
     mk_step(
       "Mahalanobis + Guttman (>=2 scales)",
       step_atypical_patterns(
-        scale_patterns_ch_us,
+        scale_patterns_cn_us,
         md_p = 0.001,
         g_z_thresh = 2,
         min_scales = 2,
@@ -424,7 +427,7 @@ atypical_patterns <- mk_group(
     mk_step(
       "Mahalanobis (p<.001 AND M/df>4.0) + Guttman (>50% AND >=2 scales)",
       step_atypical_patterns(
-        scale_patterns_it_br_sl,
+        scale_patterns_it_br_si,
         md_p = 0.001,
         md_ratio_thresh = 4.0,
         g_z_thresh = 2,
@@ -442,7 +445,7 @@ atypical_patterns <- mk_group(
 # PURPOSE: Remove US participants not included in the external inclusion dataset
 #
 # STRATEGY: Match participants using a composite key from personal identifiers
-#   (IdCode_1, IdCode_2, Id_Code3) and age. These answers are highly personal
+#   (IdCode_1, IdCode_2, IdCode_3) and age. These answers are highly personal
 #   (letters of names, mother's initial, birth month) so collisions are
 #   extremely unlikely. Duplicate keys trigger a warning for manual review.
 us_external_filter <- list(
@@ -477,7 +480,7 @@ base_steps <- list(
   # Zigzag pattern filter
   remove_zigzag,
   
-  # Atypical response pattern detection (CH/US only)
+  # Atypical response pattern detection (CN/US, and IT/BR_PT/SI with different thresholds)
   atypical_patterns
 )
 
@@ -493,8 +496,11 @@ steps <- c(
 #   1. Load data
 #   2. Run cleaning pipeline (applies applicable filters)
 #   3. Build audit trail summary
-#   4. Write cleaned file to DIR_CLEAN
-#   5. Keep summary for final report
+#   4. Store summary for final report
+#   5. Write cleaned file to DIR_CLEAN
+# Plus two dataset-specific side exports for manual review:
+#   - BR_PILOT: rows dropped by the constant-answer filter -> removed/BR_PILOT_constant_removed.sav
+#   - US datasets: rows dropped by the external inclusion check -> removed/us_external_excluded.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Initialize storage for all summaries
@@ -512,8 +518,8 @@ for (f in updated_file_list) {
       # Extract filename without extension (e.g., "CN_277273")
       name <- file_path_sans_ext(basename(f))
 
-      # Save rows removed by the constant-answer filter for br_pilot only
-      if (identical(name, "br_pilot")) {
+      # Save rows removed by the constant-answer filter for BR_PILOT only
+      if (identical(name, "BR_PILOT")) {
         df_with_row_id <- df %>% mutate(.row_id = row_number())
 
         res_after_missing <- run_cleaning_pipeline(
@@ -542,7 +548,7 @@ for (f in updated_file_list) {
 
         write_sav(
           removed_constant,
-          file.path(removed_dir, "br_pilot_constant_removed.sav")
+          file.path(removed_dir, "BR_PILOT_constant_removed.sav")
         )
       }
 
@@ -638,12 +644,13 @@ if (length(excluded_us_external) > 0) {
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # END OF 02_clean.R
-# SUMMARY: This script has applied 8+ quality filters to ~40 datasets,
-#          removing invalid responses while preserving audit trail.
+# SUMMARY: This script has applied 7 filters (many with dataset-specific sub-steps)
+#          to ~40 datasets, removing invalid responses while preserving audit trail.
 #
 # OUTPUTS CREATED:
 #   - ~40 [dataset]_clean.sav files
-#   - clean_summary.xlsx (comprehensive audit trail)
+#   - clean_summary_<timestamp>.xlsx (comprehensive audit trail)
+#   - removed/BR_PILOT_constant_removed.sav, removed/us_external_excluded.sav
 #
-# NEXT STEP: Run 03_merge_general.R to combine all cleaned datasets
+# NEXT STEP: Run 03_merge.R to combine all cleaned datasets
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
