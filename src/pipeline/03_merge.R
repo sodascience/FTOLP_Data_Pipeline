@@ -59,7 +59,7 @@ file_list <- list.files(
 dfs <- lapply(file_list, read_sav)
 
 # Name each dataframe by its filename (without .sav extension)
-# E.g., "CH_277273_clean.sav" becomes "CH_277273_clean"
+# E.g., "CN_277273_clean.sav" becomes "CN_277273_clean"
 names(dfs) <- gsub("\\.sav$", "", basename(file_list))
 
 # Add source_dataset column to each dataframe
@@ -106,8 +106,8 @@ for (df_name in names(dfs)) {
 # Origin = country where participant grew up → character country name
 
 # Stage 1 auto datasets: have country-name Nationality (like first_stage)
-# Stage 2 auto datasets (RU_auto_1, NL_auto, etc.) have yes/no Nationality like other second-stage datasets
-FIRST_STAGE_AUTO <- c("IT_auto")
+# Stage 2 auto datasets (RU_AUTO_1, NL_AUTO, etc.) have yes/no Nationality like other second-stage datasets
+FIRST_STAGE_AUTO <- c("IT_AUTO")
 
 # Helper: TRUE if df_name belongs to pilot, first_stage, or Stage 1 auto groups
 is_country_nationality <- function(df_name) {
@@ -117,12 +117,12 @@ is_country_nationality <- function(df_name) {
 }
 
 # Multilingual pattern for "yes / is a citizen"
-# Languages inferred from dataset name prefixes (CH, EN, ES, IT, BR_PT, SL, NL)
+# Languages inferred from dataset name prefixes (CN, EN, ES, IT, BR_PT, SI, NL)
 # plus additional languages anticipated in second-stage data collection
 citizen_yes_pattern <- paste0(
   "^(",
   "yes",            # English (EN)
-  "|ja",            # German (DE), Dutch (NL), Slovenian (SL), Scandinavian
+  "|ja",            # German (DE), Dutch (NL), Slovenian (SI), Scandinavian
   "|s[i\u00ed\u00ec]", # Spanish s\u00ed (ES), Italian s\u00ec (IT), informal si
   "|sim",           # Portuguese (BR_PT)
   "|oui",           # French (FR)
@@ -136,7 +136,7 @@ citizen_yes_pattern <- paste0(
   "|igen",          # Hungarian (HU)
   "|ναι",            # Greek (GR)
   "|نعم",            # Arabic (AR)
-  "|\u662f",        # Chinese \u662f (CH)
+  "|\u662f",        # Chinese \u662f (CN)
   "|\u662f\u7684",  # Chinese \u662f\u7684
   "|\uc608",        # Korean formal \uc608
   "|\ub124",        # Korean informal \ub124
@@ -153,15 +153,15 @@ citizen_yes_pattern <- paste0(
 # Covers both the local-language label variants (as surveys were authored in the
 # local language) and English equivalents (some SPSS files use English labels).
 #
-#   CH_*    : Chinese labels — Mainland China, HK, Macau, Taiwan
+#   CN_*    : Chinese labels — Mainland China, HK, Macau, Taiwan
 #   EN_*    : English labels — United Kingdom and constituent countries
 #   ES_*    : Spanish labels — España / Spain
 #   IT_*    : Italian labels — Italia / Italy
 #   BR_PT_* : Portuguese labels — Brasil / Brazil, Portugal
-#   SL_*    : Slovenian labels — Slovenija / Slovenia
+#   SI_*    : Slovenian labels — Slovenija / Slovenia
 #   US_*    : English labels — United States / USA
 citizen_country_patterns <- list(
-  CH    = paste0(
+  CN    = paste0(
     "\u4e2d\u56fd\u5927\u9646|\u4e2d\u56fd|\u4e2d\u534e\u4eba\u6c11\u5171\u548c\u56fd",  # 中国大陆 / 中国 / 中华人民共和国
     "|\u9999\u6e2f",                           # 香港
     "|\u6fb3\u95e8|\u6fb3\u9580",               # 澳门 / 澳門
@@ -175,7 +175,7 @@ citizen_country_patterns <- list(
   ES    = "Espa\u00f1a|Espana|Spain",            # España
   IT    = "Italia|Italy|Itália",
   BR_PT = "Brasil|Brazil|Portugal",
-  SL    = "Slovenija|Slovenia",
+  SI    = "Slovenija|Slovenia",
   US    = paste0(
     "United States|United States of America|USA|U\\.S\\.A\\.",
     "|U\\.S\\.|America"
@@ -184,12 +184,12 @@ citizen_country_patterns <- list(
 
 # Helper: return the citizen pattern for a given df_name, or NULL if not found
 get_citizen_pattern <- function(df_name) {
-  if      (grepl("^CH",           df_name)) citizen_country_patterns[["CH"]]
+  if      (grepl("^CN",           df_name)) citizen_country_patterns[["CN"]]
   else if (grepl("^EN",           df_name)) citizen_country_patterns[["EN"]]
   else if (grepl("^ES",           df_name)) citizen_country_patterns[["ES"]]
   else if (grepl("^IT",           df_name)) citizen_country_patterns[["IT"]]
   else if (grepl("^BR_PT|^br_",   df_name)) citizen_country_patterns[["BR_PT"]]
-  else if (grepl("^SL",           df_name)) citizen_country_patterns[["SL"]]
+  else if (grepl("^SI",           df_name)) citizen_country_patterns[["SI"]]
   else if (grepl("^US",           df_name)) citizen_country_patterns[["US"]]
   else NULL
 }
@@ -269,8 +269,8 @@ for (df_name in names(dfs)) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define which columns should be treated as categorical (→ character)
 categorical_cols <- c(
-  "id",                          # Participant identifier (e.g., "CH_277273_123")
-  "source_dataset",              # Source dataset filename (e.g., "CH_277273_clean")
+  "id",                          # Participant identifier (e.g., "CN_277273_123")
+  "source_dataset",              # Source dataset filename (e.g., "CN_277273_clean")
   "Nationality",                 # Country name (from datasets with country-code Nationality)
   "Origin",                      # Country where participant grew up
   "ImmigrationCountry",          # Country of immigration
