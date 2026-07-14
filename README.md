@@ -227,14 +227,10 @@ Merging and labeling utilities:
 - `get_schema()`: Extract variable labels, value labels, and metadata
 - `apply_schema_from()`: Apply label schema from one variable to another
 - `augment_with_reasons()`: Add missing value reason codes
-- **Missing value codes**:
-  - 990: By design
-  - 991: Unknown missing
-  - 992: Technical error
-  - 993: Refused
-  - 994: Dubious
-  - 995: Nonresponse
-  - 999: Not applicable
+- **Missing value codes** (SPSS allows max 3 user-missing values per variable):
+  - 990: `by_design` — variable not collected in this dataset (padding NA from merge)
+  - 991: `technical_error` — known data issue (e.g. NL dataset LPS_v2_6 items 1–97)
+  - 999: `missing` — participant did not respond (true missing)
 
 
 ## 📊 Dataset Groupings
@@ -243,48 +239,45 @@ Defined in `config/paths.R`:
 
 ```r
 DATASETS <- list(
-  br_pt = c("br_pilot", "BR_PT_277273"),
-  ch = c("CH_277273"),
+  br_pt = c("BR_PILOT", "BR_PT_277273"),
+  cn = c("CN_277273"),
   us = c("US_216254", "US_868141"),
-  ch_us_10_min = c("CH_277273", "US_868141"),
-  pilot = c("br_pilot"),
-  # first-stage datasets (all except IT_auto, which uses second-stage LPS and FTOS short scales)
+  cn_us_10_min = c("CN_277273", "US_868141"),
+  pilot = c("BR_PILOT"),
+  # first-stage datasets (all except IT_AUTO, which uses second-stage LPS and FTOS short scales)
   first_stage = c(
-    "CH_277273", "IT_277273",
-    "BR_PT_277273", "SL_277273",  "US_216254", "US_868141"
+    "CN_277273", "IT_277273",
+    "BR_PT_277273", "SI_277273",  "US_216254", "US_868141"
   ),
   first_stage_br_pt = c("BR_PT_277273"),
   # list of datasets to remove
-  datasets_to_remove = c("NL_999625", "BR_PT_999625", "CH_999625", "EN_277273", "EN_999625", "ES_277273", "IT_999625", "MS_999625")
+  datasets_to_remove = c("NL_999625", "BR_PT_999625", "CN_999625", "IN_EN_277273", "IN_EN_999625", "ES_277273", "IT_999625", "MY_999625")
 )
 ```
 
-**Country codes**:
-- `BR`: Brazil
-- `CH`: Switzerland
-- `EN`: English (language code, not a country)
-- `ES`: Spain
-- `ID`: Indonesia
-- `IL`: Israel
-- `IN`: India
-- `IT`: Italy
-- `MS`: Malaysia (often used for Malay-language content; ISO country code for Malaysia is actually MY)
-- `MX`: Mexico
-- `MZ`: Mozambique
-- `NL`: Netherlands
-- `RS`: Serbia
-- `RU`: Russia
-- `SA`: Saudi Arabia
-- `SK`: Slovakia
-- `SL`: Slovenia (ISO code is actually SI; SL is often used informally)
-- `TR`: Turkey
-- `US`: United States
+**Countries and languages** (see `CLAUDE.md` for the authoritative table):
 
-**Language codes**:
-- `EN`: English
-- `ES`: Spanish
-- `MS`: Malay
-- `PT`: Portuguese
+| Country | Language | Code |
+|----------|----------|------|
+| Brazil | Portuguese | `BR_PT` |
+| China | - | `CN` |
+| India | English | `IN_EN` |
+| India | Hindi | `IN_HI` |
+| Indonesia | - | `ID` |
+| Israel | Arabic | `IL_AR` |
+| Italy | - | `IT` |
+| Malaysia | - | `MY` |
+| Mexico | - | `MX` |
+| Mozambique | - | `MZ` |
+| Netherlands | - | `NL` |
+| Serbia | - | `RS` |
+| Russia | - | `RU` |
+| South Africa | - | `ZA` |
+| Slovakia | - | `SK` |
+| Slovenia | - | `SI` |
+| Spain | - | `ES` |
+| Türkiye | - | `TR` |
+| United States | - | `US` |
 
 **Survey instruments** (examples):
 - `FTOS`: Future Time Orientation Scale
@@ -295,6 +288,7 @@ DATASETS <- list(
 - `Grit`: Grit Scale
 - `CAAS`: Career Adapt-Abilities Scale
 - `DASS`: Depression, Anxiety and Stress Scale
+- `HS`: Hope Scale
 
 ## 📄 License
 
