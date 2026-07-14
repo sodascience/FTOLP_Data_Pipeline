@@ -1,5 +1,5 @@
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# SCRIPT: 01_split_raw.R -
+# SCRIPT: 01_split.R -
 # PURPOSE: Load raw LimeSurvey data, preprocess, split by country/language, 
 #          and output to processed directory
 # 
@@ -72,7 +72,7 @@ write_processed <- function(df, filename) {
 #   - Standardizes scale abbreviations (e.g., "MiLQ" -> "MLQ", "DASS21_DASS" -> "DASS")
 #   - Capitalizes demographic variable names (age -> Age, gender -> Gender)
 #   - Standardizes control item names (uppercase X -> lowercase x)
-#   - Filters out test participants (where Ref or Name contains "test")
+#   - Filters out test participants (where Ref or Name exactly equals "test", case-insensitive)
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 normalize_column_names <- function(df) {
   df %>%
@@ -116,7 +116,7 @@ normalize_column_names <- function(df) {
     {
       result <- .
       # Filter out test participants based on Ref or Name columns
-      # Test participants typically have "test" in their Ref or Name field
+      # Test participants have Ref or Name that exactly equals "test" (case-insensitive)
       if ("Ref" %in% names(result)) {
         result <- result %>% filter(is.na(Ref) | !str_detect(tolower(Ref), "^test$"))
       }
@@ -703,7 +703,8 @@ write_processed(df_india, "IN_EN_824323.sav")
 # SURVEY STAGE: Second stage (shorter follow-up questionnaire)
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # LANGUAGE: Italian
-# NOTE: Third data collection wave for Italy (vs first wave in Section 2)
+# NOTE: Third data collection wave for Italy (vs first wave in MAIN SURVEY 1,
+#       vs second wave "IT_AUTO" in the EXTRA DATASETS / ITALY EXTRA section)
 # OUTPUT: IT_855796.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_it3 <- read_raw("855796.sav") %>%
@@ -756,7 +757,7 @@ write_processed(df_us1, "US_868141.sav")
 # CHALLENGE: Need to properly separate English vs Indian participants
 #            Some participants selected wrong language or have ambiguous nationality
 #
-# SOLUTION: Complex 4-step splitting logic based on Caste field and Origin:
+# SOLUTION: Complex 5-step splitting logic based on Caste field and Origin:
 #   1. Split by initial language (en vs hi)
 #   2. Move EN participants with "Caste" data to IN (Indian-specific field)
 #   3. Move IN participants with FTOS responses but no Caste to EN
@@ -912,7 +913,8 @@ df_main2_other <- df_main_2 %>%
       TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, etc.)
     ),
 
-    # Mark printed administration for Israel only
+    # NOTE: This never matches — `country` is set to "IL_AR" above (never bare "IL"),
+    # so `printed` is always NA_real_ here in practice.
     printed = if_else(country == "IL", 0, NA_real_)
   ) %>%
   
@@ -987,14 +989,14 @@ write_processed(df_us_oregon, "US_216254.sav")
 #         These are datasets collected separately or received after main surveys
 #
 # INCLUDED COUNTRIES:
-#   - Netherlands (NL): Extra second-stage data
-#   - Russia (RU): Two-source merge (main + Excel supplement)
-#   - Israel (IL): Printed paper survey
-#   - South Africa (ZA): Full dataset with special CAAS scale
-#   - Italy (IT2): Second data collection wave
-#   - Russia (RU2): Extra dataset from second data collection wave
-#   - Slovakia (SK): Full dataset with special SK-specific scale
-#.  - Serbia (SR): Full dataset with special SR-specific scale
+#   - Netherlands (NL_AUTO): Extra second-stage data
+#   - Russia (RU_AUTO_1): Two-source merge (main + Excel supplement)
+#   - Israel (IL_AR): Printed paper survey
+#   - South Africa (ZA_AUTO): Full dataset with special CAAS scale
+#   - Italy (IT_AUTO): Second data collection wave
+#   - Russia (RU_AUTO_2): Extra dataset from second data collection wave
+#   - Slovakia (SK_AUTO): Full dataset with special LPS-goals column format
+#.  - Serbia (RS_AUTO): Excel dataset with a few source-specific column renames
 #
 # NOTE: These datasets have varied formats and require special handling
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1233,7 +1235,7 @@ write_processed(df_rs_auto, "RS_AUTO.sav")
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# END OF 01_split_raw.R
+# END OF 01_split.R
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SUMMARY: This script has processed ~20 raw survey files and split them into
 #          ~40+ country/language-specific processed files, ready for cleaning.
