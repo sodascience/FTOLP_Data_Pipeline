@@ -46,7 +46,7 @@ write_processed <- function(df, filename) {
   df <- df %>% select(where(~ !all(is.na(.))))  # Drop all-NA columns
   
   # Extract country code from filename (first part before underscore)
-  # Examples: CH_277273.sav -> CH, IN_EN_824323.sav -> IN, br_pilot.sav -> BR
+  # Examples: CN_277273.sav -> CN, IN_EN_824323.sav -> IN, br_pilot.sav -> BR
   base_name <- str_remove(filename, "\\.sav$")
   country_code <- str_to_upper(str_split(base_name, "_")[[1]][1])
   
@@ -326,8 +326,8 @@ write_processed(df_mz, "MZ.sav")
 #            - Multiple language variants (Chinese simplified/traditional, PT vs PT-BR)
 #
 # SOLUTION: Split into 6 separate datasets based on language detection and nationality:
-#           1. CH (China) - Chinese language/nationality/specific survey items
-#           2. SL (Slovenia) - Slovenian language
+#           1. CN (China) - Chinese language/nationality/specific survey items
+#           2. SI (Slovenia) - Slovenian language
 #           3. IT (Italy) - Italian language
 #           4. ES (Spain) - Spanish language
 #           5. EN (English) - English language
@@ -463,17 +463,17 @@ df_main1_china <- df_main1 %>%
   filter(id < 10169) %>%
   
   # Create new ID with country prefix and mark dataset
-  mutate(id = str_c("CH_277273_", id), dataset = "CH")
+  mutate(id = str_c("CN_277273_", id), dataset = "CN")
 
 # SLOVENIA dataset
 df_sl <- df_main1 %>%
   filter(id %in% sl_ids) %>%
-  
+
   # ID filter: Only include IDs < 10400 (specific batch cutoff)
   filter(id < 10400) %>%
-  
+
   # Create new ID with country prefix and mark dataset
-  mutate(id = str_c("SL_277273_", id), dataset = "SL")
+  mutate(id = str_c("SI_277273_", id), dataset = "SI")
 
 # ITALY dataset (first data collection wave)
 df_it <- df_main1 %>%
@@ -533,8 +533,8 @@ df_br_pt <- df_main1 %>%
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # WRITE ALL 6 COUNTRY/LANGUAGE DATASETS
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-write_processed(df_main1_china, "CH_277273.sav")
-write_processed(df_sl, "SL_277273.sav")
+write_processed(df_main1_china, "CN_277273.sav")
+write_processed(df_sl, "SI_277273.sav")
 write_processed(df_it, "IT_277273.sav")
 write_processed(df_es, "ES_277273.sav")
 write_processed(df_en, "EN_277273.sav")
@@ -772,8 +772,8 @@ write_processed(df_us1, "US_868141.sav")
 # OUTPUTS:
 #   - EN_999625.sav (English, non-Indian)
 #   - IN_EN_999625.sav (English, Indian participants)
-#   - IN_999625.sav (Hindi, Indian participants)
-#   - Multiple country-specific files (MX, RU, AR, CH, IT, NL, etc.)
+#   - IN_HI_999625.sav (Hindi, Indian participants)
+#   - Multiple country-specific files (MX, RU, IL_AR, CN, IT, NL, etc.)
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load and prepare main survey 2 data
@@ -915,11 +915,11 @@ write_processed(df_EN_999625, "EN_999625.sav")
 # Finalize IN dataset (Hindi speakers)
 df_IN_99625 <- df_IN_99625 %>%
   mutate(
-    id = str_c("IN_999625_", id),
-    dataset = "HI"    # Mark as Hindi-India
+    id = str_c("IN_HI_999625_", id),
+    dataset = "IN_HI"    # Mark as Hindi-India
   )
 
-write_processed(df_IN_99625, "IN_999625.sav")
+write_processed(df_IN_99625, "IN_HI_999625.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 5: Process remaining languages from Main Survey 2
@@ -937,20 +937,21 @@ df_main2_other <- df_main_2 %>%
     country = case_when(
       startlanguage == "es-MX" ~ "MX",        # Spanish (Mexico)
       startlanguage == "pt-BR" ~ "BR_PT",      # Portuguese (Brazil)
-      startlanguage %in% c("zh-Hans", "zh-Hant-HK") ~ "CH",  # Chinese (both variants)
+      startlanguage %in% c("zh-Hans", "zh-Hant-HK") ~ "CN",  # Chinese (both variants)
       startlanguage %in% c("ar", "AR") ~ "IL_AR", # Arabic -> Israeli Arabic (using AR code but marked as IL_AR dataset)
-      TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, AR, etc.)
+      startlanguage == "ms" ~ "MY",            # Malay -> Malaysia
+      TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, etc.)
     ),
-    
+
     # Assign dataset category codes (for later merging logic)
     dataset = case_when(
-      country == "AR" ~ "IL_AR",     # Israeli Arabic  
+      country == "IL_AR" ~ "IL_AR",  # Israeli Arabic
       country == "ID" ~ "ID",        # Indonesia
-      country == "MS" ~ "MS",        # Malay
+      country == "MY" ~ "MY",        # Malaysia
       country == "MX" ~ "MX",        # Mexico
       country == "RU" ~ "RU",        # Russia
-      country == "TR" ~ "TK",        # Turkey (using TK code)
-      country == "CH" ~ "Oth",       # China -> Other
+      country == "TR" ~ "TR",        # Turkey
+      country == "CN" ~ "Oth",       # China -> Other
       country == "BR_PT" ~ "Oth",     # Brazil -> Other
       country == "IT" ~ "Oth",       # Italy -> Other
       country == "NL" ~ "Oth",       # Netherlands -> Other
@@ -1035,7 +1036,7 @@ write_processed(df_us_oregon, "US_216254.sav")
 #   - Netherlands (NL): Extra second-stage data
 #   - Russia (RU): Two-source merge (main + Excel supplement)
 #   - Israel (IL): Printed paper survey
-#   - South Africa (SA): Full dataset with special CAAS scale
+#   - South Africa (ZA): Full dataset with special CAAS scale
 #   - Italy (IT2): Second data collection wave
 #   - Russia (RU2): Extra dataset from second data collection wave
 #   - Slovakia (SK): Full dataset with special SK-specific scale
@@ -1051,22 +1052,22 @@ write_processed(df_us_oregon, "US_216254.sav")
 # SOURCE: "Dataset NL.sav" (manually provided Dutch dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
-# OUTPUT: NL_extra.sav
+# OUTPUT: NL_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_nl_extra <- read_raw("Dataset NL.sav") %>%
   # Create ID with NL prefix
-  mutate(id = str_c("NL_extra_", id), dataset = "NL") %>%
-  
+  mutate(id = str_c("NL_AUTO_", id), dataset = "NL") %>%
+
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_processed(df_nl_extra, "NL_extra.sav")
+write_processed(df_nl_extra, "NL_AUTO.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # RUSSIA ----
@@ -1076,7 +1077,7 @@ write_processed(df_nl_extra, "NL_extra.sav")
 #         2. "participants_rus.xlsx" - Excel supplement with additional participants
 # SURVEY STAGE: Autonomous
 # SCALE VERSIONS: FTOS_v2, LPS_v2
-# OUTPUT: RU_auto_1.sav
+# OUTPUT: RU_AUTO_1.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load main Russian dataset from SPSS file
@@ -1113,7 +1114,7 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
   # Mark as autonomous Russian data collection
   mutate(strategy = "autonomous", dataset = "RU")
 
-write_processed(df_ru_extra, "RU_auto_1.sav")
+write_processed(df_ru_extra, "RU_AUTO_1.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # ISRAEL ----
@@ -1123,18 +1124,18 @@ write_processed(df_ru_extra, "RU_auto_1.sav")
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # ADMINISTRATION: Printed paper survey (printed=1)
 # NOTE: Uses Windows-1256 encoding (Arabic Windows codepage) with user_na flag
-# OUTPUT: IL_AR_auto.sav
+# OUTPUT: IL_AR_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_il_ar_auto <- read_sav(
-  file.path(DIR_RAW, "AR Autonomous.sav"), 
+  file.path(DIR_RAW, "AR Autonomous.sav"),
   encoding = "windows-1256",
   user_na = TRUE
 ) %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # Standard normalization
   normalize_column_names()
 
@@ -1142,17 +1143,17 @@ df_il_ar_auto <- read_sav(
 df_il_ar_auto <- df_il_ar_auto %>%
   # Create IDs starting from 101 (avoid conflicts with other IL datasets)
   mutate(id = 101:(100 + nrow(df_il_ar_auto))) %>%
-  
+
   # Add IL prefix to IDs
-  mutate(id = str_c("IL_AR_auto_", id)) %>%
-  
+  mutate(id = str_c("IL_AR_AUTO_", id)) %>%
+
   # Mark dataset category (IL_AR = Israeli Arabic group)
   mutate(dataset = "IL_AR") %>%
-  
+
   # Mark as printed paper survey (1 = printed, 0 = online)
   mutate(printed = 1)
 
-write_processed(df_il_ar_auto, "IL_AR_auto.sav")
+write_processed(df_il_ar_auto, "IL_AR_AUTO.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SOUTH AFRICA ----
@@ -1161,25 +1162,25 @@ write_processed(df_il_ar_auto, "IL_AR_auto.sav")
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2, CAAS_S (special South African CAAS version)
 # NOTE: Other scales were randomly assigned to participants
-# OUTPUT: SA_extra.sav
+# OUTPUT: ZA_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_sa <- read_raw("Dataset SA [full].sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # SPECIAL: Rename CAAS to CAAS_S (South African version)
   # "CAAS_1" -> "CAAS_S_1" (distinguishes from standard CAAS)
   rename_with(~ str_replace(.x, "^CAAS_(\\d+)$", "CAAS_S_\\1")) %>%
-  
+
   # Standard normalization
   normalize_column_names() %>%
-  
-  # Create ID with SA prefix and mark dataset
-  mutate(id = str_c("SA_extra_", id), dataset = "SA")
 
-write_processed(df_sa, "SA_extra.sav")
+  # Create ID with ZA prefix and mark dataset (South Africa = ZA)
+  mutate(id = str_c("ZA_AUTO_", id), dataset = "ZA")
+
+write_processed(df_sa, "ZA_AUTO.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # ITALY EXTRA ----
@@ -1189,19 +1190,19 @@ write_processed(df_sa, "SA_extra.sav")
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # NOTE: Second wave of extra Italian data (vs IT3 from Section 5)
-# OUTPUT: IT_auto.sav
+# OUTPUT: IT_AUTO.sav
 df_it2 <- read_raw("IT Autonomous.sav") %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # Standard normalization
   normalize_column_names() %>%
-  
-  # Create ID with IT prefix, mark as second wave
-  mutate(id = str_c("IT_auto", id), strategy = "data collection 2", dataset = "IT_auto")
 
-write_processed(df_it2, "IT_auto.sav")
+  # Create ID with IT_AUTO prefix, mark as second wave
+  mutate(id = str_c("IT_AUTO_", id), strategy = "data collection 2", dataset = "IT_AUTO")
+
+write_processed(df_it2, "IT_AUTO.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # RUSSIA Auto 2 ----
@@ -1209,22 +1210,22 @@ write_processed(df_it2, "IT_auto.sav")
 # SOURCE: "RU autonomous 2.sav" (manually provided Russian dataset)
 # SURVEY STAGE: Autonomous
 # SCALE VERSIONS: FTOS_v2, LPS_v2
-# OUTPUT: RU_auto_2.sav
+# OUTPUT: RU_AUTO_2.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_ru_auto_2 <- read_raw("RU autonomous 2.sav") %>%
   # Create ID with RU prefix
-  mutate(id = str_c("RU_auto_2_", id), dataset = "RU") %>%
-  
+  mutate(id = str_c("RU_AUTO_2_", id), dataset = "RU") %>%
+
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # Standard normalization and filter incomplete
   normalize_column_names() %>%
   filter(lastpage != -1)
 
-write_processed(df_ru_auto_2, "RU_auto_2.sav")
+write_processed(df_ru_auto_2, "RU_AUTO_2.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SLOVAKIA ----
@@ -1232,25 +1233,25 @@ write_processed(df_ru_auto_2, "RU_auto_2.sav")
 # SOURCE: "Slovakia autonomous.sav" (manually provided Slovak dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
-# OUTPUT: SK_auto.sav
+# OUTPUT: SK_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_sk_auto <- read_raw("Slovakia autonomous.sav") %>%
   # Create ID with SK prefix
-  mutate(id = str_c("SK_auto_", id), dataset = "SK") %>%
-  
+  mutate(id = str_c("SK_AUTO_", id), dataset = "SK") %>%
+
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
+
   # Fix LPS goals column naming
   rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
   rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
-  
+
   # Standard normalization
   normalize_column_names()
 
-write_processed(df_sk_auto, "SK_auto.sav")
+write_processed(df_sk_auto, "SK_AUTO.sav")
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1259,25 +1260,25 @@ write_processed(df_sk_auto, "SK_auto.sav")
 # SOURCE: "Serbia Autonomous.xlsx" (manually provided Serbian dataset)
 # SURVEY STAGE: Second stage
 # SCALE VERSIONS: FTOS_v2, LPS_v2
-# OUTPUT: RS_auto.sav
+# OUTPUT: RS_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 df_rs_auto <- read_excel(file.path(DIR_RAW, "Serbia Autonomous.xlsx")) %>%
   # Create ID with RS prefix
-  mutate(id = str_c("RS_auto_", row_number()), dataset = "RS") %>%
+  mutate(id = str_c("RS_AUTO_", row_number()), dataset = "RS") %>%
 
-  
+
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
 
   # Rename education_sv to education and Time stamp to timestamp
   rename(education = education_sv, timestamp = `Time stamp`) %>%
-  
-  # Standard normalization 
+
+  # Standard normalization
   normalize_column_names()
 
-write_processed(df_rs_auto, "RS_auto.sav")
+write_processed(df_rs_auto, "RS_AUTO.sav")
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
