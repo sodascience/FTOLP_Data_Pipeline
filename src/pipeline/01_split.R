@@ -46,7 +46,7 @@ write_processed <- function(df, filename) {
   df <- df %>% select(where(~ !all(is.na(.))))  # Drop all-NA columns
   
   # Extract country code from filename (first part before underscore)
-  # Examples: CN_277273.sav -> CN, IN_EN_824323.sav -> IN, br_pilot.sav -> BR
+  # Examples: CN_277273.sav -> CN, IN_EN_824323.sav -> IN, BR_PILOT.sav -> BR
   base_name <- str_remove(filename, "\\.sav$")
   country_code <- str_to_upper(str_split(base_name, "_")[[1]][1])
   
@@ -558,7 +558,7 @@ write_processed(df_br_pt, "BR_PT_277273.sav")
 # 6. Apply Brazil-specific transformations (scale splitting, factor fixing)
 # 7. Filter incomplete responses and write output
 #
-# OUTPUT: br_pilot.sav (merged and processed pilot data)
+# OUTPUT: BR_PILOT.sav (merged and processed pilot data)
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # LOAD EXTERNAL DATASET: DataSet BR&PT (contains FTOS/LPS pilot scales)
@@ -670,7 +670,7 @@ df_brazil_pilot_merged <- df_brazil_pilot %>%
   filter(lastpage != -1)
 
 # Write processed Brazil pilot dataset
-write_processed(df_brazil_pilot_merged, "br_pilot.sav")
+write_processed(df_brazil_pilot_merged, "BR_PILOT.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # INDIA ----
