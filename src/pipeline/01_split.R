@@ -267,11 +267,10 @@ brazil_pilot_fix_factors <- function(df) {
 # 2. Create unique IDs with batch identifier prefix (MZ_BATCHNUMBER_originalID)
 # 3. Mark printed vs online administration method
 # 4. Combine all three batches
-# 5. Add dataset identifier (MZ)
-# 6. Standardize scale column names (FTOS_v2_1, LPS_v2_1, etc.)
-# 7. Normalize column names (remove special chars, filter test participants)
-# 8. Remove incomplete responses (lastpage = -1 means never submitted)
-# 9. Write combined output: MZ.sav
+# 5. Standardize scale column names (FTOS_v2_1, LPS_v2_1, etc.)
+# 6. Normalize column names (remove special chars, filter test participants)
+# 7. Remove incomplete responses (lastpage = -1 means never submitted)
+# 8. Write combined output: MZ.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load first batch (online administration)
@@ -293,9 +292,6 @@ df_mz_3$printed <- 0
 
 # Combine all three batches and process
 df_mz <- bind_rows(df_mz_online, df_mz_printed, df_mz_3) %>%
-  # Mark as Mozambique dataset
-  mutate(dataset = "MZ") %>%
-  
   # Rename FTOS columns: "FTOS_1" -> "FTOS_v2_1" (mark as version 2)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   
@@ -325,13 +321,14 @@ write_processed(df_mz, "MZ.sav")
 #            - Participants selecting wrong language (e.g., selected Portuguese but answered in Chinese)
 #            - Multiple language variants (Chinese simplified/traditional, PT vs PT-BR)
 #
-# SOLUTION: Split into 6 separate datasets based on language detection and nationality:
+# SOLUTION: Split into 5 separate datasets based on language detection and nationality:
 #           1. CN (China) - Chinese language/nationality/specific survey items
 #           2. SI (Slovenia) - Slovenian language
 #           3. IT (Italy) - Italian language
 #           4. ES (Spain) - Spanish language
-#           5. EN (English) - English language
-#           6. BR_PT (Brazil) - Portuguese, excluding all above + duplicate removal
+#           5. BR_PT (Brazil) - Portuguese, excluding all above + duplicate removal
+#           English-speaking participants are not tied to a single country and
+#           are excluded from BR_PT but not written to their own file.
 #
 # PROCESSING STRATEGY:
 # 1. Load and standardize column names for first-stage scales
@@ -339,7 +336,7 @@ write_processed(df_mz, "MZ.sav")
 # 3. Extract IDs for each language group
 # 4. Split data by language with additional quality filters
 # 5. Handle Portuguese/Brazilian special cases (duplicates, conditions)
-# 6. Output 6 separate country/language files
+# 6. Output 5 separate country/language files
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load main survey 1 data
@@ -462,8 +459,8 @@ df_main1_china <- df_main1 %>%
   # ID filter: Only include IDs < 10169 (specific batch cutoff)
   filter(id < 10169) %>%
   
-  # Create new ID with country prefix and mark dataset
-  mutate(id = str_c("CN_277273_", id), dataset = "CN")
+  # Create new ID with country prefix
+  mutate(id = str_c("CN_277273_", id))
 
 # SLOVENIA dataset
 df_sl <- df_main1 %>%
@@ -472,29 +469,26 @@ df_sl <- df_main1 %>%
   # ID filter: Only include IDs < 10400 (specific batch cutoff)
   filter(id < 10400) %>%
 
-  # Create new ID with country prefix and mark dataset
-  mutate(id = str_c("SI_277273_", id), dataset = "SI")
+  # Create new ID with country prefix
+  mutate(id = str_c("SI_277273_", id))
 
 # ITALY dataset (first data collection wave)
 df_it <- df_main1 %>%
   filter(id %in% it_ids) %>%
-  
+
   # Mark as first Italy data collection wave (vs later wave)
-  mutate(id = str_c("IT_277273_", id), strategy = "data collection 1", dataset = "IT")
+  mutate(id = str_c("IT_277273_", id), strategy = "data collection 1")
 
 # SPAIN dataset
 df_es <- df_main1 %>%
   filter(id %in% es_ids) %>%
-  
-  # Create new ID with country prefix and mark dataset
-  mutate(id = str_c("ES_277273_", id), dataset = "ES")
 
-# ENGLISH dataset (generic "Other" since could be multiple countries)
-df_en <- df_main1 %>%
-  filter(id %in% en_ids) %>%
-  
-  # Mark as "Oth" (Other) since English could be US, UK, India, etc.
-  mutate(id = str_c("EN_277273_", id), dataset = "Oth")
+  # Create new ID with country prefix
+  mutate(id = str_c("ES_277273_", id))
+
+# NOTE: English-language respondents (en_ids) are not tied to a single country
+# (could be US, UK, India, etc.) and are not written to their own file — they
+# are only used above to exclude them from the BR_PT dataset (non_br_pt_ids).
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PORTUGUESE/BRAZILIAN dataset - Complex handling with duplicate removal
@@ -517,8 +511,8 @@ df_br_pt <- df_main1 %>%
   # ID filter: Only include IDs < 9971 (specific batch cutoff)
   filter(id < 9971) %>%
   
-  # Create new ID with BR_PT prefix and mark dataset
-  mutate(id = str_c("BR_PT_277273_", id), dataset = "BR_PT") %>%
+  # Create new ID with BR_PT prefix
+  mutate(id = str_c("BR_PT_277273_", id)) %>%
   
   # Merge experimental condition data (left join preserves all rows)
   left_join(df_br_pt_conditions %>% select(id, Condition), by = "id") %>%
@@ -531,13 +525,13 @@ df_br_pt <- df_main1 %>%
   select(-Condition.x, -Condition.y)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# WRITE ALL 6 COUNTRY/LANGUAGE DATASETS
+# WRITE ALL 5 COUNTRY/LANGUAGE DATASETS
+# (English respondents are not tied to a single country and are not written out)
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 write_processed(df_main1_china, "CN_277273.sav")
 write_processed(df_sl, "SI_277273.sav")
 write_processed(df_it, "IT_277273.sav")
 write_processed(df_es, "ES_277273.sav")
-write_processed(df_en, "EN_277273.sav")
 write_processed(df_br_pt, "BR_PT_277273.sav")
 
 
@@ -646,8 +640,8 @@ df_brazil_pilot_merged <- df_brazil_pilot %>%
   # Left join: Keep all pilot survey responses, add scales/demographics where available
   left_join(df_dataset_brpt, by = "id") %>%
   
-  # Create new ID with Brazil pilot prefix and mark dataset
-  mutate(id = str_c("BR_569687_", id), dataset = "BR_pilot") %>%
+  # Create new ID with Brazil pilot prefix
+  mutate(id = str_c("BR_569687_", id)) %>%
   
   # Rename MLQ (Meaning in Life Questionnaire) columns:
   # "QSV_SQ001", "QSV_SQ01" -> "MLQ_1", "MLQ_2", etc.
@@ -689,7 +683,7 @@ write_processed(df_brazil_pilot_merged, "br_pilot.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_india <- read_raw("824323.sav") %>%
   # Create ID with country/language prefix: IN_EN (English-India)
-  mutate(id = str_c("IN_EN_824323_", id), dataset = "IN_EN") %>%
+  mutate(id = str_c("IN_EN_824323_", id)) %>%
   
   # Standardize to version 2 scale names (second stage)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -714,7 +708,7 @@ write_processed(df_india, "IN_EN_824323.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_it3 <- read_raw("855796.sav") %>%
   # Create ID with country prefix, mark as data collection wave 3
-  mutate(id = str_c("IT_855796_", id), strategy = "data collection 3", dataset = "IT") %>%
+  mutate(id = str_c("IT_855796_", id), strategy = "data collection 3") %>%
   
   # Standardize to version 2 scale names (second stage)
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -739,7 +733,7 @@ write_processed(df_it3, "IT_855796.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_us1 <- read_raw("868141.sav") %>%
   # Create ID with country prefix, mark as data collection wave 2
-  mutate(id = str_c("US_868141_", id), strategy = "data collection 2", dataset = "US") %>%
+  mutate(id = str_c("US_868141_", id), strategy = "data collection 2") %>%
   
   # Fix duplicate prefix in scale names: "FTOS_FTOS1" -> "FTOS_v1_1"
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
@@ -762,15 +756,16 @@ write_processed(df_us1, "US_868141.sav")
 # CHALLENGE: Need to properly separate English vs Indian participants
 #            Some participants selected wrong language or have ambiguous nationality
 #
-# SOLUTION: Complex 3-step splitting logic based on Caste field and Origin:
+# SOLUTION: Complex 4-step splitting logic based on Caste field and Origin:
 #   1. Split by initial language (en vs hi)
 #   2. Move EN participants with "Caste" data to IN (Indian-specific field)
 #   3. Move IN participants with FTOS responses but no Caste to EN
-#   4. Further split EN into EN (non-Indian) and IN_EN (Indian English speakers)
+#   4. Identify Indian English speakers within the remaining EN pool -> IN_EN
+#      (the remaining non-Indian English respondents are not tied to a single
+#      country and are dropped rather than written to their own file)
 #   5. Process remaining languages (Spanish, Portuguese, Chinese, etc.)
 #
 # OUTPUTS:
-#   - EN_999625.sav (English, non-Indian)
 #   - IN_EN_999625.sav (English, Indian participants)
 #   - IN_HI_999625.sav (Hindi, Indian participants)
 #   - Multiple country-specific files (MX, RU, IL_AR, CN, IT, NL, etc.)
@@ -855,69 +850,43 @@ df_IN_99625 <- df_IN_99625 %>%
 df_EN_999625 <- bind_rows(df_EN_999625, in_with_ftos_no_Caste)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# STEP 4: Further split EN into EN (non-Indian) and IN_EN (Indian English speakers)
+# STEP 4: Identify Indian English speakers within the remaining EN pool -> IN_EN
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# NOTE: The remaining, non-Indian English respondents (id <= 1124, id >= 6680,
+#       or Origin in {Canada, Asian, Indonesia, Malaysia}) are not tied to a
+#       single country and are dropped here rather than written to their own file.
 
 # Remove problematic participant ID 3729 (data quality issue)
 df_EN_999625 <- df_EN_999625 %>%
   filter(id != 3729)
 
-# Identify participants to keep in general EN dataset (non-Indian)
-# Based on ID ranges and specific Origin values indicating non-Indian countries
-en_keep <- df_EN_999625 %>%
-  filter(
+# Identify Indian English speakers: everyone NOT in the non-Indian
+# ID ranges/Origin values below
+in_en_new <- df_EN_999625 %>%
+  filter(!(
     # Early batch (IDs 1-1124)
     id <= 1124 |
-    
-    # Later batch (IDs 6680+)
-    id >= 6680 |
-    
-    # Specific non-Indian origins
-    Origin %in% c("canada", "Asian", "Indonesia", "Malaysia", "MALAYSIA")
-  )
-
-# Remaining EN participants are Indian English speakers -> move to IN_EN
-in_en_new <- df_EN_999625 %>%
-  # Participants NOT in the keep criteria above
-  filter(!(
-    id <= 1124 |
+      # Later batch (IDs 6680+)
       id >= 6680 |
+      # Specific non-Indian origins
       Origin %in% c("canada", "Asian", "Indonesia", "Malaysia", "MALAYSIA")
   )) %>%
-  
+
   # Update demographics to reflect Indian nationality
   mutate(
     Nationality = 1,    # Code 1 = India
     Origin = NA         # Clear origin field
   )
 
-# Update df_EN_999625 to only contain non-Indian English speakers
-df_EN_999625 <- en_keep
-
 # Create in_en dataset (Indian English speakers)
 df_in_en_999625 <- in_en_new %>%
-  mutate(
-    id = str_c("IN_EN_999625_", id),
-    dataset = "IN_EN"    # Mark as English-India
-  )
+  mutate(id = str_c("IN_EN_999625_", id))
 
 write_processed(df_in_en_999625, "IN_EN_999625.sav")
 
-# Finalize EN dataset (non-Indian English speakers)
-df_EN_999625 <- df_EN_999625 %>%
-  mutate(
-    id = str_c("EN_999625_", id),
-    dataset = "Oth"    # Mark as "Other" (could be various countries)
-  )
-
-write_processed(df_EN_999625, "EN_999625.sav")
-
 # Finalize IN dataset (Hindi speakers)
 df_IN_99625 <- df_IN_99625 %>%
-  mutate(
-    id = str_c("IN_HI_999625_", id),
-    dataset = "IN_HI"    # Mark as Hindi-India
-  )
+  mutate(id = str_c("IN_HI_999625_", id))
 
 write_processed(df_IN_99625, "IN_HI_999625.sav")
 
@@ -943,21 +912,6 @@ df_main2_other <- df_main_2 %>%
       TRUE ~ toupper(startlanguage)           # Default: uppercase 2-letter code (IT, NL, etc.)
     ),
 
-    # Assign dataset category codes (for later merging logic)
-    dataset = case_when(
-      country == "IL_AR" ~ "IL_AR",  # Israeli Arabic
-      country == "ID" ~ "ID",        # Indonesia
-      country == "MY" ~ "MY",        # Malaysia
-      country == "MX" ~ "MX",        # Mexico
-      country == "RU" ~ "RU",        # Russia
-      country == "TR" ~ "TR",        # Turkey
-      country == "CN" ~ "Oth",       # China -> Other
-      country == "BR_PT" ~ "Oth",     # Brazil -> Other
-      country == "IT" ~ "Oth",       # Italy -> Other
-      country == "NL" ~ "Oth",       # Netherlands -> Other
-      TRUE ~ NA_character_
-    ),
-    
     # Mark printed administration for Israel only
     printed = if_else(country == "IL", 0, NA_real_)
   ) %>%
@@ -1005,7 +959,7 @@ df_main2_other <- df_main_2 %>%
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 df_us_oregon <- read_raw("216254.sav") %>%
   # Create ID with country prefix, mark as data collection wave 1
-  mutate(id = str_c("US_216254_", id), strategy = "data collection 1", dataset = "US") %>%
+  mutate(id = str_c("US_216254_", id), strategy = "data collection 1") %>%
   
   # Fix duplicate prefix in scale names: "FTOS_FTOS1" -> "FTOS_v1_1"
   rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
@@ -1057,7 +1011,7 @@ write_processed(df_us_oregon, "US_216254.sav")
 
 df_nl_extra <- read_raw("Dataset NL.sav") %>%
   # Create ID with NL prefix
-  mutate(id = str_c("NL_AUTO_", id), dataset = "NL") %>%
+  mutate(id = str_c("NL_AUTO_", id)) %>%
 
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -1112,7 +1066,7 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
   normalize_column_names() %>%
   
   # Mark as autonomous Russian data collection
-  mutate(strategy = "autonomous", dataset = "RU")
+  mutate(strategy = "autonomous")
 
 write_processed(df_ru_extra, "RU_AUTO_1.sav")
 
@@ -1147,9 +1101,6 @@ df_il_ar_auto <- df_il_ar_auto %>%
   # Add IL prefix to IDs
   mutate(id = str_c("IL_AR_AUTO_", id)) %>%
 
-  # Mark dataset category (IL_AR = Israeli Arabic group)
-  mutate(dataset = "IL_AR") %>%
-
   # Mark as printed paper survey (1 = printed, 0 = online)
   mutate(printed = 1)
 
@@ -1177,8 +1128,8 @@ df_sa <- read_raw("Dataset SA [full].sav") %>%
   # Standard normalization
   normalize_column_names() %>%
 
-  # Create ID with ZA prefix and mark dataset (South Africa = ZA)
-  mutate(id = str_c("ZA_AUTO_", id), dataset = "ZA")
+  # Create ID with ZA prefix (South Africa = ZA)
+  mutate(id = str_c("ZA_AUTO_", id))
 
 write_processed(df_sa, "ZA_AUTO.sav")
 
@@ -1200,7 +1151,7 @@ df_it2 <- read_raw("IT Autonomous.sav") %>%
   normalize_column_names() %>%
 
   # Create ID with IT_AUTO prefix, mark as second wave
-  mutate(id = str_c("IT_AUTO_", id), strategy = "data collection 2", dataset = "IT_AUTO")
+  mutate(id = str_c("IT_AUTO_", id), strategy = "data collection 2")
 
 write_processed(df_it2, "IT_AUTO.sav")
 
@@ -1215,7 +1166,7 @@ write_processed(df_it2, "IT_AUTO.sav")
 
 df_ru_auto_2 <- read_raw("RU autonomous 2.sav") %>%
   # Create ID with RU prefix
-  mutate(id = str_c("RU_AUTO_2_", id), dataset = "RU") %>%
+  mutate(id = str_c("RU_AUTO_2_", id)) %>%
 
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -1238,7 +1189,7 @@ write_processed(df_ru_auto_2, "RU_AUTO_2.sav")
 
 df_sk_auto <- read_raw("Slovakia autonomous.sav") %>%
   # Create ID with SK prefix
-  mutate(id = str_c("SK_AUTO_", id), dataset = "SK") %>%
+  mutate(id = str_c("SK_AUTO_", id)) %>%
 
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
@@ -1265,7 +1216,7 @@ write_processed(df_sk_auto, "SK_AUTO.sav")
 
 df_rs_auto <- read_excel(file.path(DIR_RAW, "Serbia Autonomous.xlsx")) %>%
   # Create ID with RS prefix
-  mutate(id = str_c("RS_AUTO_", row_number()), dataset = "RS") %>%
+  mutate(id = str_c("RS_AUTO_", row_number())) %>%
 
 
   # Standardize to version 2 scale names
