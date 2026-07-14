@@ -416,7 +416,8 @@ atypical_patterns <- mk_group(
         scale_patterns_ch_us,
         md_p = 0.001,
         g_z_thresh = 2,
-        min_scales = 2
+        min_scales = 2,
+        scale_flag_logic = "OR"
       ),
       datasets = c(us, ch)
     ),
@@ -429,7 +430,8 @@ atypical_patterns <- mk_group(
         g_z_thresh = 2,
         min_scales = 0.5,
         min_flags = 2,
-        use_partial = FALSE
+        use_partial = FALSE,
+        scale_flag_logic = "OR"
       ),
       datasets = c("IT_277273", "IT_auto", "BR_PT_277273", "SL_277273")
     )
