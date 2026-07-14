@@ -25,5 +25,5 @@ DATASETS <- list(
   ),
   first_stage_br_pt = c("BR_PT_277273"),
   # list of datasets to remove
-  datasets_to_remove = c("NL_999625", "BR_PT_999625", "CN_999625", "IN_EN_277273", "IN_EN_999625", "ES_277273", "IT_999625", "MY_999625")
+  datasets_to_remove = c("NL_999625", "BR_PT_999625", "CN_999625", "ES_277273", "IT_999625", "MY_999625")
 )
