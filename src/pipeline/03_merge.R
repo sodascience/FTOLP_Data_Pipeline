@@ -1,5 +1,5 @@
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# 03_merge_general.R - COMBINE ALL CLEANED DATASETS INTO SINGLE FILE
+# 03_merge.R - COMBINE ALL CLEANED DATASETS INTO SINGLE FILE
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PURPOSE: Merge all cleaned country/language-specific datasets into one
 #          comprehensive dataset for analysis. Handles type mismatches,
@@ -9,7 +9,8 @@
 #          - ~40 [dataset]_clean.sav files
 #          - Each contains cleaned responses with SPSS labelled format
 #
-# OUTPUTS: Combined dataset (in global environment as "merged_df")
+# OUTPUTS: Combined dataset, left in global environment as "merged_df" and
+#          written to DIR_MERGED as merged_dataset.sav / .csv / .xlsx
 #          - Single dataframe with all participants
 #          - Standardized column types
 #          - Consistent missing value coding
@@ -18,17 +19,16 @@
 # KEY CHALLENGES SOLVED:
 #   1. Type mismatches: Same column stored as character in one dataset, numeric in another
 #   2. Missing value codes: Different datasets use different NA codes (999, -99, etc.)
-#   3. Adults columns: Wide format needs reshaping to long format
-#   4. Label conflicts: Duplicate labels when merging datasets
-#   5. Padding NAs: bind_rows() creates NAs for columns not present in all datasets
+#   3. Label conflicts: Duplicate/conflicting value labels when merging datasets
+#   4. Padding NAs: bind_rows() creates NAs for columns not present in all datasets
 #
 # PROCESSING STEPS:
 #   1. Load all cleaned files
-#   2. Fix "Adults" columns (reshape from wide to long format)
-#   3. Standardize column types (categorical→character, numeric→numeric)
-#   4. Label existing missing values with SPSS codes (990-999)
+#   2. Standardize column types (categorical→character, numeric→numeric)
+#   3. Label existing missing values with SPSS codes (990-999)
+#   4. Normalize value labels pre-merge to avoid bind_rows() label-conflict warnings
 #   5. Merge all datasets with bind_rows()
-#   6. Label padding NAs (990 = "Variable not included in this dataset")
+#   6. Label padding NAs (990 = "by design", i.e. variable not collected in that dataset)
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Load required libraries
@@ -79,9 +79,9 @@ all_na_values <- c(990, 991, 999)
 # Gender: For pilot and first stage datasets, Gender_v1; others: Gender_v2
 # Use the Datasets list from config/paths.R to identify which datasets belong to which stage
 for (df_name in names(dfs)) {
-  # if df_name starts with any of the datasets in first_stage or "br_pilot", rename Gender to Gender_v1, 
+  # if df_name starts with any of the datasets in first_stage or "BR_PILOT", rename Gender to Gender_v1,
   # else rename Gender to Gender_v2
-  if (any(grepl(paste(DATASETS$first_stage, collapse = "|"), df_name)) || grepl("^br_pilot", df_name)) {
+  if (any(grepl(paste(DATASETS$first_stage, collapse = "|"), df_name)) || grepl("^BR_PILOT", df_name)) {
     dfs[[df_name]] <- dfs[[df_name]] %>%
       rename(Gender_v1 = Gender)
   } else {
@@ -154,7 +154,6 @@ citizen_yes_pattern <- paste0(
 # local language) and English equivalents (some SPSS files use English labels).
 #
 #   CN_*    : Chinese labels — Mainland China, HK, Macau, Taiwan
-#   EN_*    : English labels — United Kingdom and constituent countries
 #   ES_*    : Spanish labels — España / Spain
 #   IT_*    : Italian labels — Italia / Italy
 #   BR_PT_* : Portuguese labels — Brasil / Brazil, Portugal
@@ -167,10 +166,6 @@ citizen_country_patterns <- list(
     "|\u6fb3\u95e8|\u6fb3\u9580",               # 澳门 / 澳門
     "|\u53f0\u6e7e|\u53f0\u7063",               # 台湾 / 台灣
     "|Mainland China|Hong Kong|Macau|Macao|Taiwan|China"
-  ),
-  EN    = paste0(
-    "United Kingdom|Britain|Great Britain|England|Scotland|Wales|Northern Ireland",
-    "|UK|U\\.K\\."
   ),
   ES    = "Espa\u00f1a|Espana|Spain",            # España
   IT    = "Italia|Italy|Itália",
@@ -185,7 +180,6 @@ citizen_country_patterns <- list(
 # Helper: return the citizen pattern for a given df_name, or NULL if not found
 get_citizen_pattern <- function(df_name) {
   if      (grepl("^CN",           df_name)) citizen_country_patterns[["CN"]]
-  else if (grepl("^EN",           df_name)) citizen_country_patterns[["EN"]]
   else if (grepl("^ES",           df_name)) citizen_country_patterns[["ES"]]
   else if (grepl("^IT",           df_name)) citizen_country_patterns[["IT"]]
   else if (grepl("^BR_PT|^br_",   df_name)) citizen_country_patterns[["BR_PT"]]
@@ -421,11 +415,11 @@ for (df_name in names(dfs)) {
           old_labels <- tryCatch(val_labels(column_data), error = function(e) NULL)
           column_data[is.na(column_data)] <- 999
 
-          # Step 2: Technical error 
-          # 2. In the Dutch datasets, the item 6 of LPS needs to be set as 991 
+          # Step 2: Technical error
+          # 2. In the Dutch dataset, the item 6 of LPS needs to be set as 991
           # (missing due to technical error) up to participant 97.
           if (startsWith(df_name, "NL") && cur_column() == "LPS_v2_6") {
-            # Parse participant IDs separated by _ (e.g., "NL_277273_123" → 123)
+            # Parse participant IDs separated by _ (e.g., "NL_AUTO_123" → 123)
             ids <- dfs[[df_name]]$id
             participant_ids <- as.numeric(sub(".*_(\\d+)$", "\\1", ids))
             # Set 991 for participants with IDs up to 97
@@ -549,11 +543,11 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
           }
 
           # CRITICAL FIX: Temporarily remove labelled class
-          # Haven's is.na() method treats code 993 as NA (by design)
-          # unclass() restores normal R behavior: is.na(993) = FALSE
+          # Haven's is.na() method treats code 999 as NA (by design)
+          # unclass() restores normal R behavior: is.na(999) = FALSE
           # This lets us distinguish:
           #   - True R NA (padding from bind_rows) → replace with 990
-          #   - Numeric 993 (existing missing code) → leave alone
+          #   - Numeric 999 (existing missing code) → leave alone
           unclassed_data <- unclass(column_data)
           
           # Another safety check: ensure unclassed_data is numeric
@@ -564,9 +558,9 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
           # Replace ONLY true R NAs with code 990
           # if_else preserves numeric type (no coercion)
           column_data_replaced <- if_else(
-            is.na(unclassed_data),               # TRUE only for R NA (not 993)
+            is.na(unclassed_data),               # TRUE only for R NA (not 999)
             as.numeric(code_to_assign),          # Replace with 990
-            unclassed_data                       # Keep existing values (including 993)
+            unclassed_data                       # Keep existing values (including 999)
           )
 
           # Get existing labels (only keep unique, non-missing value labels)
@@ -591,7 +585,7 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
           # This maintains SPSS compatibility
           labelled_spss(
             x = column_data_replaced,
-            na_values = all_na_values,           # Only 990, 991, 993 (3 codes max)
+            na_values = all_na_values,           # Only 990, 991, 999 (3 codes max)
             labels = limited_labels              # Apply limited label set
           )
         }
