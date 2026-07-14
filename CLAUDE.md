@@ -38,7 +38,7 @@ Must be edited per user. Key variables:
 ```r
 DATA_ROOT      # base data directory (not in this repo — lives on Nextcloud/local disk)
 DIR_RAW        # raw LimeSurvey .sav exports
-DIR_SPLIT      # output of 01_split.R (country subdirectories: DIR_SPLIT/CH/, DIR_SPLIT/US/, ...)
+DIR_SPLIT      # output of 01_split.R (country subdirectories: DIR_SPLIT/CN/, DIR_SPLIT/US/, ...)
 DIR_CLEAN      # output of 02_clean.R
 DIR_EXTERNAL   # external/manually provided files (conditions.sav, duplicates, etc.)
 DIR_MERGED     # output of 03_merge.R
@@ -48,10 +48,10 @@ DATASETS       # named list of dataset groupings (see below)
 `DATASETS` is a named list of character vectors used to gate which filters apply to which datasets during cleaning, and which datasets are dropped entirely:
 
 ```r
-DATASETS$first_stage        # CH_277273, IT_277273, BR_PT_277273, SL_277273, US_216254, US_868141
-DATASETS$br_pt              # br_pilot, BR_PT_277273
+DATASETS$first_stage        # CN_277273, IT_277273, BR_PT_277273, SI_277273, US_216254, US_868141
+DATASETS$br_pt              # BR_PILOT, BR_PT_277273
 DATASETS$us                 # US_216254, US_868141
-DATASETS$ch_us_10_min       # CH_277273, US_868141 — get extra 10-min duration filter
+DATASETS$cn_us_10_min       # CN_277273, US_868141 — get extra 10-min duration filter
 DATASETS$datasets_to_remove # skipped entirely during 02_clean.R
 ```
 
@@ -60,13 +60,13 @@ DATASETS$datasets_to_remove # skipped entirely during 02_clean.R
 ### LimeSurvey
 Raw LimeSurvey exports are named by survey ID (e.g. `277273.sav`). After `01_split.R`:
 
-- After `01_split.R`, split files are written to `DIR_SPLIT/COUNTRY/COUNTRY_[LANGUAGE]_SURVEYID.sav` (e.g. `DIR_SPLIT/BR/BR_PT_277273.sav`)
+- After `01_split.R`, split files are written to `DIR_SPLIT/COUNTRY/COUNTRY[_LANGUAGE]_SURVEYID.sav` (e.g. `DIR_SPLIT/BR/BR_PT_277273.sav`). Note that LANGUAGE is optional and it mainly applies to datasets collected from Brazil, Israel and India. Also, COUNTRY refers to the location of data collection, not the nationality of participants. The 2-letter ISO country codes are used (e.g., `BR`, `CN`, `IT`, `US`),
 - Each row gets a composite string ID: `COUNTRY_[LANGUAGE]_SURVEYID_originalID` (e.g. `BR_PT_277273_1`)
-- `dataset` column stores a short country/group code (e.g. `"BR_PT"`)
+- `dataset` column stores a short country/group (plus language) code (e.g. `"BR_PT"`)
 - After `02_clean.R`, cleaned files are written to `DIR_CLEAN/COUNTRY/COUNTRY_[LANGUAGE]_SURVEYID_CLEAN.sav` (e.g. `DIR_CLEAN/BR/BR_PT_277273_CLEAN.sav`)
 
 Exceptions:
-- Not all datasets have language codes in their names (e.g., `"US_216254.sav"` and `"IT_277273.sav"`).
+- Most datasets do not have language codes in their names (e.g., `"US_216254.sav"` and `"IT_277273.sav"`).
 - The pilot Brazilian Portugese dataset is named `"BR_PILOT.sav"` after `01_split.R` and `"BR_PILOT_CLEAN.sav"` after `02_clean.R`. It is the only pilot dataset.
 
 ### Other sources
@@ -75,25 +75,53 @@ Other raw datasets have no consistent naming convention (e.g., `"Dataset_15.08.2
 - After `02_clean.R`, they are renamed to `DIR_CLEAN/COUNTRY/COUNTRY_AUTO_[NUMBER]_CLEAN.sav` (e.g. `RU_AUTO_1_CLEAN.sav`).
 - `"AUTO"` means that the dataset is not from a known survey export and may have different variables, different variable names, different variable coding and other idiosyncrasies. It is treated independently during cleaning and merging. Most of the "AUTO" datasets are from the second stage, but some are from the first stage. 
 
+### Countries and languages
+| Country | Language | Code |
+|----------|----------|------|
+| Brazil | Portuguese | `BR_PT` |
+| China | - | `CN` |
+| India | English | `IN_EN` |
+| India | Hindi | `IN_HI` |
+| Indonesia | - | `ID` |
+| Israel | Arabic | `IL_AR` |
+| Italy | - | `IT` |
+| Malaysia | - | `MY` |
+| Mexico | - | `MX` |
+| Mozambique | - | `MZ` |
+| Netherlands | - | `NL` |
+| Serbia | - | `RS` |
+| Russia | - | `RU` |
+| South Africa | - | `ZA` |
+| Slovakia | - | `SK` |
+| Slovenia | - | `SI` |
+| Spain | - | `ES` |
+| Türkiye | - | `TR` |
+| United States | - | `US` |
+
+
 ## Survey stages
-### Pilot
+The most important difference between the three survey stages is the version of the FTOS and LPS scales used: pilot (version), v1, or v2. Some demographic varialbles such as gender and education may also be operationalised differently. Besides differences across survey stages, different countries may include additional demographic variables and psychological measures. The cleaning and merging pipeline is designed to handle these differences.
+
+The three stages and their corresponding datasets after `01_split.R` are:
+
+### Pilot stage
 - BR_PILOT.sav
 
 ### Stage 1
 - BR_PT_277273.sav
-- CH_277273.sav
+- CN_277273.sav
 - IT_277273.sav
 - IT_AUTO.sav
-- SL_277273.sav
+- SI_277273.sav
 - US_216254.sav
 - US_868141.sav
 
 ### Stage 2
-- AR_999625.sav
 - ES_999625.sav
 - ID_999625.sav
+- IL_AR_999625.sav
 - IL_AR_AUTO.sav
-- IN_999625.sav
+- IN_HI_999625.sav
 - IN_EN_824323.sav
 - IN_EN_999625.sav
 - IT_855796.sav
@@ -104,18 +132,18 @@ Other raw datasets have no consistent naming convention (e.g., `"Dataset_15.08.2
 - RU_999625.sav
 - RU_AUTO_1.sav
 - RU_AUTO_2.sav
-- SA_AUTO.sav
+- ZA_AUTO.sav
 - SK_AUTO.sav
 - TR_999625.sav
 
 ### Remove
 - BR_PT_999625.sav
-- CH_999625.sav
-- EN_277273.sav
-- EN_999625.sav
+- CN_999625.sav
+- IN_EN_277273.sav
+- IN_EN_999625.sav
 - ES_277273.sav
 - IT_999625.sav
-- MS_999625.sav
+- MY_999625.sav
 - NL_999625.sav
 
 ## Scale naming convention
