@@ -105,11 +105,15 @@ for (df_name in names(dfs)) {
 #
 # Origin = country where participant grew up → character country name
 
-# Helper: TRUE if df_name belongs to pilot or first_stage groups or has "auto"
+# Stage 1 auto datasets: have country-name Nationality (like first_stage)
+# Stage 2 auto datasets (RU_auto_1, NL_auto, etc.) have yes/no Nationality like other second-stage datasets
+FIRST_STAGE_AUTO <- c("IT_auto")
+
+# Helper: TRUE if df_name belongs to pilot, first_stage, or Stage 1 auto groups
 is_country_nationality <- function(df_name) {
-  grepl("auto", df_name, ignore.case = TRUE) ||
-    any(sapply(DATASETS$pilot,       function(p) grepl(p, df_name, fixed = TRUE))) ||
-    any(sapply(DATASETS$first_stage, function(p) grepl(p, df_name, fixed = TRUE)))
+  any(sapply(DATASETS$pilot,       function(p) grepl(p, df_name, fixed = TRUE))) ||
+  any(sapply(DATASETS$first_stage, function(p) grepl(p, df_name, fixed = TRUE))) ||
+  any(sapply(FIRST_STAGE_AUTO,     function(p) grepl(p, df_name, fixed = TRUE)))
 }
 
 # Multilingual pattern for "yes / is a citizen"
@@ -251,9 +255,9 @@ for (df_name in names(dfs)) {
     df[["Origin"]][is.na(df[["Origin"]])] <- "999"
   }
 
-  # Datasets with "auto" in filename contain only local/automatic participants → Citizen = 1
-  # unconditionally, regardless of whether Nationality or any other column exists.
-  if (grepl("auto", df_name, ignore.case = TRUE)) {
+  # Stage 1 auto datasets contain only local participants → Citizen = 1 unconditionally.
+  # Stage 2 auto datasets derive Citizen from their yes/no Nationality column (handled above).
+  if (any(sapply(FIRST_STAGE_AUTO, function(p) grepl(p, df_name, fixed = TRUE)))) {
     df[["Citizen"]] <- 1L
   }
 
@@ -269,6 +273,7 @@ categorical_cols <- c(
   "source_dataset",              # Source dataset filename (e.g., "CH_277273_clean")
   "Nationality",                 # Country name (from datasets with country-code Nationality)
   "Origin",                      # Country where participant grew up
+  "ImmigrationCountry",          # Country of immigration
   "Sex",
   "Gender_v1",
   "Gender_v2",
@@ -283,7 +288,10 @@ numerical_cols <- c(
   grep("^(FTOS|LPS)_(pilot|v1|v2)_\\d+$", all_cols, value = TRUE),
   # Demographics that should be numeric
   "Age",
-  "Citizen"                      # 0/1 citizen indicator (1 = citizen, from second-stage datasets)
+  "Citizen",                     # 0/1 citizen indicator (1 = citizen, from second-stage datasets)
+  "Immigration",                 # Immigration status indicator
+  "ImmigrationTime_years",       # Years since immigration
+  "ImmigrationTime_months"       # Months since immigration
 )
 
 # Combine all relevant columns into one vector for processing
@@ -612,7 +620,7 @@ for (col in char_demo_cols) {
 }
 
 # Rearrange columns: put id, info and demographic first, then scales
-first_cols <- c("id", "source_dataset", "Nationality", "Citizen", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
+first_cols <- c("id", "source_dataset", "Nationality", "Citizen", "Origin", "ImmigrationCountry", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
 first_cols <- first_cols[first_cols %in% names(merged_df)]
 scale_cols <- setdiff(names(merged_df), first_cols)
 merged_df <- merged_df %>% select(all_of(first_cols), all_of(scale_cols))
