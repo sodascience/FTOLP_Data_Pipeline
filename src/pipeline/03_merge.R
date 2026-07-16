@@ -304,6 +304,33 @@ for (df_name in names(dfs)) {
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Extract LPSgoal* columns into a separate, id-linked file ----
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# LPSgoal#_content (free-text goal description) / LPSgoal#_age (target age)
+# are open-ended per-goal items, not part of relevant_cols below, so they'd
+# otherwise be silently dropped by select(any_of(relevant_cols)). They're kept
+# in their own file instead, joinable back to merged_dataset via id. This
+# extraction happens before the missing-value-labeling step further down, so
+# unanswered items are left as plain NA rather than coded 999/990.
+extract_lps_goals <- function(dfs, pattern = "^LPSgoal\\d+_(content|age)$") {
+  per_dataset <- lapply(names(dfs), function(df_name) {
+    df <- dfs[[df_name]]
+    goal_cols <- grep(pattern, names(df), value = TRUE)
+    if (length(goal_cols) == 0) return(NULL)
+    df %>%
+      select(id, source_dataset, all_of(goal_cols)) %>%
+      mutate(
+        id = as.character(id),
+        across(matches("_content$"), as.character),
+        across(matches("_age$"), ~ suppressWarnings(as.numeric(as.character(.x))))
+      )
+  })
+  bind_rows(per_dataset)
+}
+
+lps_goals_df <- extract_lps_goals(dfs)
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define relevant variables ----
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define which columns should be treated as categorical (→ character)
@@ -680,3 +707,9 @@ output_file_name <- file.path(DIR_MERGED, "merged_dataset")
 write_sav(merged_df, paste0(output_file_name, ".sav"))
 write_csv(merged_df, paste0(output_file_name, ".csv"))
 write_xlsx(merged_df, paste0(output_file_name, ".xlsx"))
+
+# Write the LPSgoal* file separately, linked to merged_dataset via id
+lps_goals_file_name <- file.path(DIR_MERGED, "lps_goals")
+write_sav(lps_goals_df, paste0(lps_goals_file_name, ".sav"))
+write_csv(lps_goals_df, paste0(lps_goals_file_name, ".csv"))
+write_xlsx(lps_goals_df, paste0(lps_goals_file_name, ".xlsx"))
