@@ -195,6 +195,23 @@ test_that("extract_lps_goals returns an empty (zero-row) tibble, not an error, w
   expect_equal(nrow(out), 0)
 })
 
+test_that("the Occupation_other normalization step converts character free text to a 0/1 flag without touching numeric datasets", {
+  # Regression test: Occupation_other is character free text ("please
+  # specify") in most datasets but already a 0/1 numeric flag in a few
+  # (IT_AUTO, RU_AUTO_1/2, ZA_AUTO) - the generic type-standardization step
+  # would otherwise convert character text to NA via as.numeric(), silently
+  # losing the "selected other" signal.
+  dfs <- list(
+    TEXT_DS = tibble(id = c("A", "B", "C"), Occupation_other = c("teacher", "", NA)),
+    NUMERIC_DS = tibble(id = "D", Occupation_other = 1),
+    NO_COL_DS = tibble(id = "E", FTOS_v1_1 = 3)
+  )
+  out <- load_occupation_other_normalizer(dfs)
+  expect_equal(out$TEXT_DS$Occupation_other, c(1, 0, 0))
+  expect_equal(out$NUMERIC_DS$Occupation_other, 1) # untouched, already numeric
+  expect_false("Occupation_other" %in% names(out$NO_COL_DS)) # untouched, absent
+})
+
 test_that("char_demo_cols pads every categorical_cols column (minus id/source_dataset) to '990', not a hand-picked subset", {
   # Regression test: Sex/Gender_v1/Gender_v2/Gender_other/ImmigrationCountry
   # used to be left as "" (haven's SPSS round-trip of a padding NA) instead
@@ -204,7 +221,8 @@ test_that("char_demo_cols pads every categorical_cols column (minus id/source_da
   env <- load_char_demo_cols()
   expect_setequal(
     env$char_demo_cols,
-    c("Nationality", "Origin", "ImmigrationCountry", "Sex", "Gender_v1", "Gender_v2", "Gender_other")
+    c("Nationality", "Origin", "ImmigrationCountry", "Sex", "Gender_v1", "Gender_v2", "Gender_other",
+      "Education_RS", "Occupation_SK")
   )
   expect_false(any(c("id", "source_dataset") %in% env$char_demo_cols))
 })
