@@ -45,6 +45,7 @@ library(here)
 # Load configuration and helper functions
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "merge_functions.R"))
+source(here::here("src", "utils", "validation.R"))
 
 # LOAD ALL CLEANED DATASETS
 # Read all .sav files from clean directory and subfolders and store in named list
@@ -115,6 +116,19 @@ is_country_nationality <- function(df_name) {
   any(sapply(DATASETS$first_stage, function(p) grepl(p, df_name, fixed = TRUE))) ||
   any(sapply(FIRST_STAGE_AUTO,     function(p) grepl(p, df_name, fixed = TRUE)))
 }
+
+# VALIDATE: every DATASETS$pilot / DATASETS$first_stage / FIRST_STAGE_AUTO entry
+# should match at least one dataset actually loaded from DIR_CLEAN. A token
+# matching nothing means is_country_nationality() silently misclassifies that
+# dataset's stage - the same failure mode that broke Gender/Nationality
+# routing for BR_PILOT before its filename casing was fixed to match
+# DATASETS$pilot.
+assert_datasets_exist(
+  c(DATASETS$pilot, DATASETS$first_stage, FIRST_STAGE_AUTO),
+  names(dfs),
+  context = "03_merge.R pilot/first_stage/auto groupings",
+  fixed = TRUE
+)
 
 # Multilingual pattern for "yes / is a citizen"
 # Languages inferred from dataset name prefixes (CN, EN, ES, IT, BRPT, SI, NL)
@@ -220,6 +234,17 @@ for (df_name in names(dfs)) {
           )
           # True-missing Nationality → Citizen is also missing
           df[["Citizen"]][nat_decoded == "999"] <- NA_integer_
+        } else {
+          # VALIDATE: no citizen_country_patterns entry matched this dataset's
+          # prefix - Citizen never gets created for these rows at all (not
+          # even as NA), which is exactly how the dead "EN" branch behaved.
+          warning(
+            sprintf(
+              "[03_merge.R get_citizen_pattern] No citizen pattern matched '%s' - Citizen will not be created for this dataset.",
+              df_name
+            ),
+            call. = FALSE
+          )
         }
       }
     } else {
@@ -256,6 +281,25 @@ for (df_name in names(dfs)) {
   }
 
   dfs[[df_name]] <- df
+}
+
+# VALIDATE: flag any dataset where Citizen ended up NA for every single row.
+# This is the signature a silently-unmatched routing branch would leave behind
+# (e.g. get_citizen_pattern() returning NULL for every row, or
+# is_country_nationality() misclassifying the dataset's stage) - exactly what
+# happened when the "EN" citizen-pattern branch went dead after EN_277273.sav/
+# EN_999625.sav stopped being generated.
+for (df_name in names(dfs)) {
+  citizen_col <- dfs[[df_name]][["Citizen"]]
+  if (!is.null(citizen_col) && nrow(dfs[[df_name]]) > 0 && all(is.na(citizen_col))) {
+    warning(
+      sprintf(
+        "[03_merge.R Citizen check] Dataset '%s' has Citizen = NA for every row - likely an unmatched citizen-pattern or stage-routing branch.",
+        df_name
+      ),
+      call. = FALSE
+    )
+  }
 }
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
