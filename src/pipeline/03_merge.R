@@ -46,6 +46,7 @@ library(here)
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "merge_functions.R"))
 source(here::here("src", "utils", "validation.R"))
+source(here::here("config", "scales.R"))
 
 # LOAD ALL CLEANED DATASETS
 # Read all .sav files from clean directory and subfolders and store in named list
@@ -320,10 +321,18 @@ categorical_cols <- c(
 )
 
 # Define which columns should be treated as numeric (→ numeric)
+# Scale items come from SCALE_PATTERNS (config/scales.R) - the same registry
+# 02_clean.R's QC filters use - rather than a single hand-written FTOS/LPS-only
+# regex. Before this fix, that regex meant every non-FTOS/LPS scale
+# (CAAS, MLQ, AS, IPIP, GRIT, DASS, IT, DMF, Psy_DGI/Psy_LOT, HS, ES, ESW_PS,
+# CAAS_S, Psy_CIPIP, ...) was silently dropped from the merged dataset by the
+# select(any_of(relevant_cols)) step below, despite having been specifically
+# QC-checked in 02_clean.R (or, for CAAS_S/Psy_CIPIP, despite being legitimate
+# scale data never referenced by any filter at all).
 all_cols <- unique(unlist(lapply(dfs, names)))
+scale_item_cols <- unique(unlist(lapply(SCALE_PATTERNS, function(p) grep(p, all_cols, value = TRUE))))
 numerical_cols <- c(
-  # Scale items (e.g., FTOS_pilot_1, FTOS_v1_1, FTOS_v2_1, LPS_pilot_1, etc.)
-  grep("^(FTOS|LPS)_(pilot|v1|v2)_\\d+$", all_cols, value = TRUE),
+  scale_item_cols,
   # Demographics that should be numeric
   "Age",
   "Citizen",                     # 0/1 citizen indicator (1 = citizen, from second-stage datasets)
