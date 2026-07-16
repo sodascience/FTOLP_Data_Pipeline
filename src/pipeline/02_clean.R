@@ -226,34 +226,36 @@ remove_zigzag <- mk_group(
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# SCALE PATTERNS: Define regex patterns for atypical pattern checks
-# Used by Mahalanobis + Guttman filters to identify scale columns
+# SCALE PATTERNS: Which scales the atypical-pattern (Mahalanobis + Guttman)
+# filter checks per dataset group. Patterns are looked up from SCALE_PATTERNS
+# in config/scales.R (the single source of truth) rather than hand-copied
+# here, so a pattern fix there automatically applies to this filter too.
 scale_patterns_cn_us <- list(
-  FTOS = "^FTOS_v1_\\d+$",           # First-stage FTOS items
-  LPS = "^LPS_v1_\\d+$",             # First-stage LPS items
-  CAAS = "^CAAS_\\d+$",              # Career Adapt-Abilities Scale
-  DGI = "^(Psy_)?DGI_?\\d+$",        # DGI scale (with/without Psy_ prefix)
-  MLQ = "^MLQ_\\d+$",                # Meaning in Life Questionnaire
-  AS = "^AS_\\d+$",                  # Authenticity Scale
-  LS = "^LS_BRS\\d+$",               # Life Satisfaction - Brief Resilience Scale (CN only)
-  ESW = "^ESW_PS\\d+$",              # Existential Scale - Work (CN only)
-  ESS = "^ES_\\d+$",                 # Existential Scale (CN only)
-  FS = "^FS_\\d+$",                  # Flourishing Scale (CN only)
-  GRIT = "^GRIT_\\d+$"               # Grit Scale (US only)
+  FTOS = SCALE_PATTERNS[["FTOS_v1"]],  # First-stage FTOS items
+  LPS  = SCALE_PATTERNS[["LPS_v1"]],   # First-stage LPS items
+  CAAS = SCALE_PATTERNS[["CAAS"]],     # Career Adapt-Abilities Scale
+  DGI  = SCALE_PATTERNS[["DGI"]],      # DGI scale (with/without Psy_ prefix)
+  MLQ  = SCALE_PATTERNS[["MLQ"]],      # Meaning in Life Questionnaire
+  AS   = SCALE_PATTERNS[["AS"]],       # Authenticity Scale
+  BRS  = SCALE_PATTERNS[["BRS"]],      # Life Satisfaction - Brief Resilience Scale (CN only)
+  ESW  = SCALE_PATTERNS[["ESW"]],      # Existential Scale - Work (CN only)
+  ESS  = SCALE_PATTERNS[["ESS"]],      # Existential Scale (CN only)
+  FS   = SCALE_PATTERNS[["FS"]],       # Flourishing Scale (CN only)
+  GRIT = SCALE_PATTERNS[["GRIT"]]      # Grit Scale (US only)
 )
 
 scale_patterns_it_brpt_si <- list(
-  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BRPT_277273, SI_277273)
-  FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_AUTO)
-  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BRPT_277273, SI_277273)
-  LPS_v2  = "^LPS_v2_\\d+$",         # Second-stage LPS (IT_AUTO)
-  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BRPT_277273, IT_AUTO)
-  AS      = "^AS_\\d+$",             # Authenticity Scale (BRPT_277273, IT_AUTO)
-  IPIP    = "^IPIP_\\d+$",           # Big Five personality (BRPT_277273 only)
-  HS      = "^HS_\\d+$",             # HS scale (BRPT_277273 only)
-  DASS    = "^DASS_\\d+$",           # Depression Anxiety Stress Scales (SI_277273 only)
-  IT      = "^IT_\\d+$",             # Italian Time Perspective (IT_277273, IT_AUTO)
-  DMF     = "^DMF_\\d+$"             # Decision Making Fluency (IT_277273, IT_AUTO)
+  FTOS_v1 = SCALE_PATTERNS[["FTOS_v1"]],  # First-stage FTOS (IT_277273, BRPT_277273, SI_277273)
+  FTOS_v2 = SCALE_PATTERNS[["FTOS_v2"]],  # Second-stage FTOS (IT_AUTO)
+  LPS_v1  = SCALE_PATTERNS[["LPS_v1"]],   # First-stage LPS (IT_277273, BRPT_277273, SI_277273)
+  LPS_v2  = SCALE_PATTERNS[["LPS_v2"]],   # Second-stage LPS (IT_AUTO)
+  MLQ     = SCALE_PATTERNS[["MLQ"]],      # Meaning in Life Questionnaire (BRPT_277273, IT_AUTO)
+  AS      = SCALE_PATTERNS[["AS"]],       # Authenticity Scale (BRPT_277273, IT_AUTO)
+  IPIP    = SCALE_PATTERNS[["IPIP"]],     # Big Five personality (BRPT_277273 only)
+  HS      = SCALE_PATTERNS[["HS"]],       # HS scale (BRPT_277273 only)
+  DASS    = SCALE_PATTERNS[["DASS"]],     # Depression Anxiety Stress Scales (SI_277273 only)
+  IT      = SCALE_PATTERNS[["IT"]],       # Italian Time Perspective (IT_277273, IT_AUTO)
+  DMF     = SCALE_PATTERNS[["DMF"]]       # Decision Making Fluency (IT_277273, IT_AUTO)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
