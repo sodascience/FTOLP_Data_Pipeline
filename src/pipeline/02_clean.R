@@ -55,6 +55,7 @@ library(here)
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
 source(here::here("src", "utils", "validation.R"))
+source(here::here("config", "scales.R"))  # depends on mk_step() from cleaning_functions.R
 
 # Load external US inclusion list for extra check
 external_us_file <- file.path(DIR_EXTERNAL, "DataSet US - Extra Check.sav")
@@ -160,68 +161,11 @@ filter_na <- mk_group("Missing response",
 #
 # NOTE: Different datasets have different scales, so filters are targeted
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Steps are generated from CONSTANT_ANSWER_SCALES in config/scales.R (single
+# source of truth for scale name / column pattern / applicable datasets).
 constant_and_binary <- mk_group(
   "Drop rows with constant responses",
-  steps = list(
-    # Core FTOS scales (different versions for different survey stages)
-    mk_step("FTOS_v1", step_constant_answers()),  # First-stage FTOS (default pattern)
-    
-    mk_step(
-      "FTOS_v2", 
-      step_constant_answers("^FTOS_v2_\\d+$"),    # Second-stage FTOS
-      datasets = c("IT_AUTO")                    # Only Italian auto dataset
-    ),
-    
-    mk_step(
-      "FTOS_pilot", 
-      step_constant_answers("^FTOS_pilot_\\d+$")  # Pilot version FTOS
-    ),
-    
-    # Brazil pilot scales: DGI and LOT (split from LoTeDGI)
-    mk_step(
-      "DGI", 
-      step_constant_answers(col_pattern = "^Psy_DGI\\d+$")   # DGI items: Psy_DGI1, Psy_DGI2, etc.
-    ),
-    
-    mk_step(
-      "LOT", 
-      step_constant_answers(col_pattern = "^Psy_LOT\\d+$")   # LOT items: Psy_LOT1, Psy_LOT2, etc.
-    ),
-    
-    # Brazil/Portugal specific scales
-    mk_step(
-      "IPIP",
-      step_constant_answers(col_pattern = "^IPIP_\\d+$"),    # Big Five personality inventory
-      datasets = brpt                                       # Only BRPT datasets
-    ),
-    
-    # China-specific scale
-    mk_step(
-      "LS",
-      step_constant_answers(col_pattern = "^LS_BRS\\d+$"),   # Life Satisfaction - Brief Resilience Scale
-      datasets = cn                                          # Only Chinese datasets
-    ),
-    
-    # Multi-country scales (BRPT, China, US)
-    mk_step(
-      "MLQ",
-      step_constant_answers(col_pattern = "^MLQ_\\d+$"),     # Meaning in Life Questionnaire
-      datasets = c(brpt, cn, us)                             # BRPT + China + US
-    ),
-    
-    mk_step(
-      "AS",
-      step_constant_answers(col_pattern = "^AS_\\d+$"),      # Authenticity Scale
-      datasets = c(brpt, cn, us)                             # BRPT + China + US
-    ),
-    
-    # US-specific scale
-    mk_step(
-      "GRIT",
-      step_constant_answers(col_pattern = "^GRIT_\\d+$"),    # Grit Scale (perseverance)
-      datasets = us                                          # Only US datasets
-    )
-  )
+  steps = build_scale_steps(CONSTANT_ANSWER_SCALES, step_constant_answers)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -274,106 +218,11 @@ check_attention <- mk_group(
 #   - Italy: IT, DMF
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
+# Steps are generated from ZIGZAG_SCALES in config/scales.R (single source
+# of truth for scale name / column pattern / applicable datasets).
 remove_zigzag <- mk_group(
   "Remove zigzag answers",
-  steps = list(
-    # Core scales - All first-stage datasets
-    mk_step(
-      "FTOS1",
-      step_detect_zigzag(col_pattern = "^FTOS_v1_\\d+$"),   # First-stage FTOS
-      datasets = first_stage                                # All first-stage surveys
-    ),
-    
-    mk_step(
-      "FTOS2",
-      step_detect_zigzag(col_pattern = "^FTOS_v2_\\d+$"),   # Second-stage FTOS
-      datasets = c("IT_AUTO")                              # Italian auto only
-    ),
-    
-    mk_step(
-      "LPS",
-      step_detect_zigzag(col_pattern = "^LPS_v1_\\d+$"),    # First-stage LPS
-      datasets = first_stage                                # All first-stage surveys
-    ),
-    
-    mk_step(
-      "LPS2",
-      step_detect_zigzag(col_pattern = "^LPS_v2_\\d+$"),    # Second-stage LPS
-      datasets = c("IT_AUTO")                              # Italian auto only
-    ),
-
-    # Multi-country scales (BRPT, US, China)
-    mk_step(
-      "MLQ",
-      step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
-      datasets = c(first_stage_brpt, us, cn, "IT_AUTO")  # BRPT + US + CN + IT
-    ),
-    
-    mk_step(
-      "AS",
-      step_detect_zigzag(col_pattern = "^AS_\\d+$"),        # Authenticity Scale
-      datasets = c(first_stage_brpt, us, cn, "IT_AUTO")  # BRPT + US + CN + IT
-    ),
-
-    # Brazil/Portugal specific scales
-    mk_step(
-      "IPIP",
-      step_detect_zigzag(col_pattern = "^IPIP_\\d+$"),      # Big Five personality (BRPT only)
-      datasets = first_stage_brpt
-    ),
-
-    mk_step(
-      "HS",
-      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # HS scale (BRPT only)
-      datasets = first_stage_brpt
-    ),
-
-    # China specific scales
-    mk_step(
-      "CAAS",
-      step_detect_zigzag(col_pattern = "^CAAS_\\d+$"),      # Career Adapt-Abilities Scale (complete version)
-      datasets = cn
-    ),
-    
-    mk_step(
-      "ESS",
-      step_detect_zigzag(col_pattern = "^ES_\\d+$"),        # Existential Scale
-      datasets = cn
-    ),
-    
-    mk_step(
-      "ESW",
-      step_detect_zigzag(col_pattern = "^ESW_PS\\d+$"),     # Existential Scale - Work
-      datasets = cn
-    ),
-
-    # US specific scale
-    mk_step(
-      "GRIT",
-      step_detect_zigzag(col_pattern = "^GRIT_\\d+$"),      # Grit Scale (perseverance)
-      datasets = us
-    ),
-
-    # Slovenia specific scale
-    mk_step(
-      "DASS",
-      step_detect_zigzag(col_pattern = "^DASS_\\d+$"),      # Depression Anxiety Stress Scales
-      datasets = c("SI_277273")                             # Slovenia only
-    ),
-
-    # Italy specific scales
-    mk_step(
-      "IT",
-      step_detect_zigzag(col_pattern = "^IT_\\d+$"),        # Italian Time Perspective scale
-      datasets = c("IT_277273", "IT_AUTO")
-    ),
-    
-    mk_step(
-      "DMF",
-      step_detect_zigzag(col_pattern = "^DMF_\\d+$"),       # Decision Making Fluency
-      datasets = c("IT_277273", "IT_AUTO")
-    )
-  )
+  steps = build_scale_steps(ZIGZAG_SCALES, step_detect_zigzag)
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
