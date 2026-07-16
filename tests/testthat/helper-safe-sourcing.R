@@ -207,3 +207,21 @@ load_categorical_translation_step <- function(merged_df) {
   eval(parse(text = lines[start:end]), envir = env)
   env$merged_df
 }
+
+# 03_merge.R: the Occupation_other character-to-numeric normalization step
+# (right after lps_goals_df <- extract_lps_goals(dfs)) operates directly on
+# `dfs`, which we pre-seed.
+load_occupation_other_normalizer <- function(dfs) {
+  lines <- .read_pipeline_lines("03_merge.R")
+  start <- .find_marker(lines, "^dfs <- lapply\\(dfs, function\\(df\\) \\{$", "03_merge.R", "start of Occupation_other normalization")
+  rel_end <- which(grepl("^\\}\\)$", lines[(start + 1):length(lines)]))[1]
+  if (is.na(rel_end)) {
+    stop("Could not find closing '})' for the Occupation_other normalization step in 03_merge.R - the test helper extraction needs updating.", call. = FALSE)
+  }
+  end <- start + rel_end
+
+  env <- new.env(parent = globalenv())
+  env$dfs <- dfs
+  eval(parse(text = lines[start:end]), envir = env)
+  env$dfs
+}
