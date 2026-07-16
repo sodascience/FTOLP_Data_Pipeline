@@ -7,6 +7,8 @@ R pipeline for the "Future Time Orientation and Life Projects" (FTOLP) research 
 ```
 config/
   paths.R                  # All directory paths + DATASETS groupings — must be configured locally
+  scales.R                 # Registry of scale column patterns, consumed by 02_clean.R and 03_merge.R
+  translations.R           # English translation lookup tables for categorical demographic values
 src/
   pipeline/
     01_split.R             # Load raw .sav files, split by country/language, write to DIR_SPLIT
@@ -191,7 +193,8 @@ Key operations in order:
 7. **Pre-merge label normalization**: strip language-specific scale-point labels to prevent `bind_rows()` warnings
 8. `bind_rows()` merge
 9. **Padding NA labeling** via `label_merge_NAs()`: replace `NA`s introduced by `bind_rows()` with `990` ("by design")
-10. Export as `.sav`, `.csv`, `.xlsx` to `DIR_MERGED`
+10. **Categorical translation** (`config/translations.R`): translate `Sex`/`Gender_v1`/`Gender_v2`/`Nationality`/`Origin`/`ImmigrationCountry` to English via `GENDER_TRANSLATIONS`/`COUNTRY_TRANSLATIONS` lookup tables, keeping the original-language value in a parallel `<column>_original` column (e.g. `Sex_original`). Values with no table entry (missing codes `990`/`991`/`999`, and a few free-text `Origin` answers that are full sentences rather than a single country name) pass through unchanged. `Gender_other` is deliberately excluded — it's open-ended free text (self-described gender identity), not a bounded label set.
+11. Export as `.sav`, `.csv`, `.xlsx` to `DIR_MERGED`
 
 **LPSgoal\* file**: `LPSgoal#_content` (free-text goal description) and `LPSgoal#_age` (target age) columns are open-ended per-goal items, not part of `relevant_cols`. `extract_lps_goals()` pulls `id` + all `LPSgoal*` columns from each dataset (before step 4's column selection would otherwise drop them) and writes them separately as `lps_goals.sav`/`.csv`/`.xlsx` to `DIR_MERGED`, joinable back to `merged_dataset` via `id`. Unanswered items are left as plain `NA` (this extraction runs before step 6's missing-value coding).
 
