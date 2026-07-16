@@ -117,3 +117,15 @@ load_merge_nas_labeler <- function() {
   eval(parse(text = lines[start:end]), envir = env)
   env
 }
+
+# 03_merge.R: extract_lps_goals() is a self-contained function (takes a `dfs`
+# list as its only input, does no file I/O) - safe to extract directly.
+load_lps_goals_extractor <- function() {
+  lines <- .read_pipeline_lines("03_merge.R")
+  start <- .find_marker(lines, "^extract_lps_goals <- function", "03_merge.R", "extract_lps_goals()")
+  end <- .find_closing_brace_after(lines, start, "03_merge.R", "extract_lps_goals()")
+
+  env <- new.env(parent = globalenv())
+  eval(parse(text = lines[start:end]), envir = env)
+  env
+}
