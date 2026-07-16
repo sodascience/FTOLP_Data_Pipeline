@@ -147,6 +147,55 @@ keep_most_complete_row <- function(df, id_col = "id", scale_pattern = "^(FTOS|LP
     select(-.is_complete, -.n_answered, -.duration, -.recorded)
 }
 
+# RS_AUTO's raw "age" column is free text (Excel, no input validation), mixing
+# plain ages ("20", "20."), Serbian-suffixed ages ("20 godina", "Imam 61 god."),
+# birth years ("1973", "2005"), a combined answer ("2003 / 20. godine"), typos
+# ("19p", "7o"), spelled-out numbers ("Devetnaest"), and refusals ("mnogo",
+# "Srednje godine"). This extracts a clean numeric age: birth-year-shaped
+# 4-digit values are converted to age via submission_year (all RS_AUTO
+# timestamps are 2023); anything that doesn't reduce to a plausible age
+# (10-100) - including spelled-out numbers and refusals, which this does not
+# attempt to parse - becomes NA (later coded 999/missing by the merge step).
+clean_rs_auto_age <- function(raw, submission_year) {
+  x <- str_trim(as.character(raw))
+
+  # For combined answers ("2003 / 20. godine"), prefer the part explicitly
+  # labeled with a Serbian "years" suffix over a bare (year-shaped) number.
+  needs_split <- str_detect(x, "/") %in% TRUE
+  if (any(needs_split)) {
+    x[needs_split] <- vapply(x[needs_split], function(v) {
+      parts <- str_trim(str_split(v, "/")[[1]])
+      labeled <- parts[str_detect(parts, regex("god", ignore_case = TRUE))]
+      if (length(labeled) > 0) labeled[1] else parts[1]
+    }, character(1))
+  }
+
+  digits <- str_extract(x, "\\d+")
+  n <- suppressWarnings(as.numeric(digits))
+
+  is_birth_year <- !is.na(digits) & nchar(digits) == 4 & n >= 1900 & n <= submission_year
+  age <- ifelse(is_birth_year, submission_year - n, n)
+
+  ifelse(is.na(age) | age < 10 | age > 100, NA_real_, age)
+}
+
+# "AR Autonomous.sav" (IL_AR_AUTO) needs encoding = "windows-1256" to parse at
+# all (some fields are genuinely windows-1256-encoded and reading as UTF-8
+# errors on invalid byte sequences), but its Gender value labels are actually
+# already UTF-8, so the windows-1256 override double-encodes them into
+# mojibake (e.g. Arabic "ذكر" comes out as
+# "ط°ظƒط±"). Round-tripping through windows-1256
+# reverses this: re-encoding the mojibake string as windows-1256 bytes
+# recovers the original UTF-8 byte sequence, which then decodes cleanly.
+fix_mojibake_utf8 <- function(x) {
+  raw <- iconv(x, from = "UTF-8", to = "windows-1256", toRaw = TRUE)
+  vapply(raw, function(b) {
+    if (is.null(b)) return(NA_character_)
+    out <- tryCatch(iconv(list(b), from = "UTF-8", to = "UTF-8"), error = function(e) NA_character_)
+    if (length(out) == 0 || is.na(out)) NA_character_ else out
+  }, character(1))
+}
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Normalize and standardize column names across different survey versions
 # This ensures consistency when merging datasets from different countries/languages
@@ -1070,23 +1119,33 @@ process_dataset("Dataset NL.sav", "NL_AUTO_", "v2", "NL_AUTO.sav")
 df_ru_extra_main <- read_raw("Dataset_15.08.2022, RU (1).sav") %>%
   # Fix data type issues (some columns imported as character, need numeric)
   mutate(
+    # Add RU_AUTO_1 prefix so ids follow the project-wide COUNTRY_..._originalID
+    # convention (this dataset's raw ids were left unprefixed until now).
+    id = str_c("RU_AUTO_1_", id),
+
     # Convert submitdate from character to proper datetime format
     submitdate = ymd_hm(submitdate),
-    
+
     # Convert open-ended "other" fields to numeric (contains IDs, not text)
     Race_other = as.numeric(Race_other),
     Occupation_other = as.numeric(Occupation_other),
-    
+
     # Convert LPS goals age columns to numeric
     # Uses across() to apply to multiple columns matching pattern
-    across(starts_with("LPSgoals_goal") & ends_with("_age"), as.numeric)
+    across(starts_with("LPSgoals_goal") & ends_with("_age"), as.numeric),
+
+    # Gender has one response coded 3, which has no value label anywhere in
+    # this file (only 1/2/666/666666 are labelled) - treat as missing rather
+    # than guess its meaning.
+    Gender = { g <- Gender; g[!is.na(unclass(g)) & unclass(g) == 3] <- NA; g }
   )
 
 # Load supplementary Russian participants from Excel file
 df_ru_extra_second <- read_excel(file.path(DIR_RAW, "participants_rus.xlsx"))
 
-# Create IDs for Excel participants (starting from 101 to avoid conflicts)
-df_ru_extra_second$id <- 101:(100 + nrow(df_ru_extra_second))
+# Create IDs for Excel participants (starting from 101 to avoid conflicts with
+# the main source's raw ids), prefixed to match the project-wide convention.
+df_ru_extra_second$id <- str_c("RU_AUTO_1_", 101:(100 + nrow(df_ru_extra_second)))
 
 # Combine both Russian datasets
 df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
@@ -1117,7 +1176,16 @@ df_il_ar_auto <- read_sav(
   file.path(DIR_RAW, "AR Autonomous.sav"),
   encoding = "windows-1256",
   user_na = TRUE
-) %>%
+)
+
+# Gender's value labels come out mojibake-corrupted under the windows-1256
+# override above (see fix_mojibake_utf8()) - reverse it before Gender gets
+# converted to text (Gender_v2) later in 03_merge.R.
+gender_labels <- attr(df_il_ar_auto$Gender, "labels")
+names(gender_labels) <- fix_mojibake_utf8(names(gender_labels))
+attr(df_il_ar_auto$Gender, "labels") <- gender_labels
+
+df_il_ar_auto <- df_il_ar_auto %>%
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
@@ -1178,7 +1246,12 @@ process_dataset("IT Autonomous.sav", "IT_AUTO_", "v2", "IT_AUTO.sav",
 # OUTPUT: RU_AUTO_2.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav")
+process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav",
+  # Gender has one response coded 3, which has no value label anywhere in
+  # this file (only 1/2/666/666666 are labelled) - treat as missing rather
+  # than guess its meaning.
+  extra_mutate = \(df) df %>%
+    mutate(gender = { g <- gender; g[!is.na(unclass(g)) & unclass(g) == 3] <- NA; g }))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SLOVAKIA ----
@@ -1216,6 +1289,21 @@ df_rs_auto <- read_excel(file.path(DIR_RAW, "Serbia Autonomous.xlsx")) %>%
   # Create ID with RS prefix
   mutate(id = str_c("RS_AUTO_", row_number())) %>%
 
+  # Raw "age" is free text (birth years, Serbian-suffixed ages, typos,
+  # refusals, one combined answer) - see clean_rs_auto_age() for the parsing
+  # rules. All submissions are from 2023 (checked against `Time stamp`).
+  mutate(age = clean_rs_auto_age(age, submission_year = 2023)) %>%
+
+  # Raw "gender" is unlabelled numeric (1/2/666/666666). The same codes with
+  # the same Portuguese labels show up already-labelled in this project's
+  # other "AUTO" datasets sourced independently (RU_AUTO_1's
+  # "Dataset_15.08.2022, RU (1).sav" and RU_AUTO_2's "RU autonomous 2.sav"
+  # both label 1 = Mulher, 2 = Homem, 666 = "Prefiro não responder",
+  # 666666 = "other") - a shared template reused across countries, so the
+  # same mapping is applied here rather than left undecoded.
+  mutate(gender = labelled(gender, labels = c(
+    "Mulher" = 1, "Homem" = 2, "Prefiro não responder" = 666, "other" = 666666
+  ))) %>%
 
   # Standardize to version 2 scale names
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
