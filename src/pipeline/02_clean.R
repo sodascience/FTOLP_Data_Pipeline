@@ -12,8 +12,6 @@
 # OUTPUTS: Cleaned .sav files written to DIR_CLEAN
 #          - [dataset]_clean.sav
 #          - clean_summary_<timestamp>.xlsx - Audit trail showing how many responses removed at each step
-#          - removed/BR_PILOT_constant_removed.sav - rows the constant-answer filter dropped for BR_PILOT
-#          - removed/us_external_excluded.sav - US rows dropped by the external inclusion check
 #
 # CLEANING STEPS (7 filters applied, in this order):
 #   1. Missing Response: Remove rows with missing core scale data (FTOS, LPS)
@@ -373,14 +371,10 @@ assert_datasets_exist(
 #   3. Build audit trail summary
 #   4. Store summary for final report
 #   5. Write cleaned file to DIR_CLEAN
-# Plus two dataset-specific side exports for manual review:
-#   - BR_PILOT: rows dropped by the constant-answer filter -> removed/BR_PILOT_constant_removed.sav
-#   - US datasets: rows dropped by the external inclusion check -> removed/us_external_excluded.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
 # Initialize storage for all summaries
 all_summaries <- list()
-excluded_us_external <- list()
 
 # Process each file in the processed directory
 for (f in updated_file_list) {
@@ -389,43 +383,9 @@ for (f in updated_file_list) {
     {
       # Load SPSS file
       df <- read_sav(f)
-      
+
       # Extract filename without extension (e.g., "CN_277273")
       name <- file_path_sans_ext(basename(f))
-
-      # Save rows removed by the constant-answer filter for BR_PILOT only
-      if (identical(name, "BR_PILOT")) {
-        df_with_row_id <- df %>% mutate(.row_id = row_number())
-
-        res_after_missing <- run_cleaning_pipeline(
-          df_with_row_id,
-          name,
-          steps = list(filter_na)
-        )
-
-        res_after_constant <- run_cleaning_pipeline(
-          df_with_row_id,
-          name,
-          steps = list(filter_na, constant_and_binary)
-        )
-
-        removed_constant <- res_after_missing$df_clean %>%
-          anti_join(
-            res_after_constant$df_clean %>% select(.row_id),
-            by = ".row_id"
-          ) %>%
-          select(-.row_id)
-
-        removed_dir <- file.path(DIR_CLEAN, "removed")
-        if (!dir.exists(removed_dir)) {
-          dir.create(removed_dir, recursive = TRUE)
-        }
-
-        write_sav(
-          removed_constant,
-          file.path(removed_dir, "BR_PILOT_constant_removed.sav")
-        )
-      }
 
       # Optional diagnostic checks (commented out)
       # Can be enabled to inspect specific columns before cleaning
@@ -438,32 +398,6 @@ for (f in updated_file_list) {
       res <- run_cleaning_pipeline(df, name, steps)
       df_clean <- res$df_clean          # Cleaned data
       audit <- res$audit                # Audit trail (rows removed per step)
-
-      # Save rows removed by US external check after atypical pattern filtering
-      if (name %in% us) {
-        df_with_row_id <- df %>% mutate(.row_id = row_number())
-
-        res_before_external <- run_cleaning_pipeline(
-          df_with_row_id,
-          name,
-          steps = base_steps
-        )
-
-        res_after_external <- run_cleaning_pipeline(
-          df_with_row_id,
-          name,
-          steps = steps
-        )
-
-        removed_external <- res_before_external$df_clean %>%
-          anti_join(
-            res_after_external$df_clean %>% select(.row_id),
-            by = ".row_id"
-          ) %>%
-          select(-.row_id)
-
-        excluded_us_external[[name]] <- removed_external
-      }
 
       # Build wide-format summary showing before/after/removed counts
       summary_wide <- build_wide_summary(
@@ -502,21 +436,6 @@ summary_filename <- sprintf("clean_summary_%s.xlsx", format(Sys.time(), "%Y%m%d_
 write_xlsx(summary_all, file.path(DIR_CLEAN, summary_filename))
 message("Cleaning summary saved to: ", summary_filename)
 
-# WRITE EXCLUDED US PARTICIPANTS (EXTERNAL CHECK) ----
-if (length(excluded_us_external) > 0) {
-  removed_dir <- file.path(DIR_CLEAN, "removed")
-  if (!dir.exists(removed_dir)) {
-    dir.create(removed_dir, recursive = TRUE)
-  }
-
-  excluded_us_all <- bind_rows(excluded_us_external, .id = "source_dataset")
-  write_sav(
-    excluded_us_all,
-    file.path(removed_dir, "us_external_excluded.sav")
-  )
-}
-
-
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # END OF 02_clean.R
 # SUMMARY: This script has applied 7 filters (many with dataset-specific sub-steps)
@@ -525,7 +444,6 @@ if (length(excluded_us_external) > 0) {
 # OUTPUTS CREATED:
 #   - ~40 [dataset]_clean.sav files
 #   - clean_summary_<timestamp>.xlsx (comprehensive audit trail)
-#   - removed/BR_PILOT_constant_removed.sav, removed/us_external_excluded.sav
 #
 # NEXT STEP: Run 03_merge.R to combine all cleaned datasets
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
