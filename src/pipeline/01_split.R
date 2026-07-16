@@ -326,9 +326,9 @@ write_processed(df_mz, "MZ.sav")
 #           2. SI (Slovenia) - Slovenian language
 #           3. IT (Italy) - Italian language
 #           4. ES (Spain) - Spanish language
-#           5. BR_PT (Brazil) - Portuguese, excluding all above + duplicate removal
+#           5. BRPT (Brazil & Portugal, mixed pool) - Portuguese, excluding all above + duplicate removal
 #           English-speaking participants are not tied to a single country and
-#           are excluded from BR_PT but not written to their own file.
+#           are excluded from BRPT but not written to their own file.
 #
 # PROCESSING STRATEGY:
 # 1. Load and standardize column names for first-stage scales
@@ -443,7 +443,7 @@ en_ids <- df_main1 %>%
   pull(id)
 
 # Combine all non-Portuguese IDs for later exclusion
-non_br_pt_ids <- unique(c(china_ids, sl_ids, it_ids, es_ids, en_ids))
+non_brpt_ids <- unique(c(china_ids, sl_ids, it_ids, es_ids, en_ids))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # CREATE COUNTRY-SPECIFIC DATASETS WITH QUALITY FILTERS
@@ -488,7 +488,7 @@ df_es <- df_main1 %>%
 
 # NOTE: English-language respondents (en_ids) are not tied to a single country
 # (could be US, UK, India, etc.) and are not written to their own file — they
-# are only used above to exclude them from the BR_PT dataset (non_br_pt_ids).
+# are only used above to exclude them from the BRPT dataset (non_brpt_ids).
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # PORTUGUESE/BRAZILIAN dataset - Complex handling with duplicate removal
@@ -496,26 +496,26 @@ df_es <- df_main1 %>%
 
 # Load list of duplicate IDs to exclude (stored in external file)
 # IDs stored with offset, need to subtract 22200000 to match df_main1 IDs
-df_br_pt_duplicate_ids <- read_sav(file.path(DIR_EXTERNAL, "duplicates_PT&BR.sav")) %>%
+df_brpt_duplicate_ids <- read_sav(file.path(DIR_EXTERNAL, "duplicates_PT&BR.sav")) %>%
   mutate(id = id - 22200000) %>%
   pull(id)
 
 # Load experimental condition assignments (for merging additional metadata)
-df_br_pt_conditions <- read_sav(file.path(DIR_EXTERNAL, "conditions.sav"))
+df_brpt_conditions <- read_sav(file.path(DIR_EXTERNAL, "conditions.sav"))
 
 # PORTUGUESE/BRAZILIAN dataset (default: all remaining participants)
-df_br_pt <- df_main1 %>%
+df_brpt <- df_main1 %>%
   # Exclude anyone already assigned to other language/country + known duplicates
-  filter(!(id %in% non_br_pt_ids | id %in% df_br_pt_duplicate_ids)) %>%
+  filter(!(id %in% non_brpt_ids | id %in% df_brpt_duplicate_ids)) %>%
   
   # ID filter: Only include IDs < 9971 (specific batch cutoff)
   filter(id < 9971) %>%
   
-  # Create new ID with BR_PT prefix
-  mutate(id = str_c("BR_PT_277273_", id)) %>%
+  # Create new ID with BRPT prefix
+  mutate(id = str_c("BRPT_277273_", id)) %>%
   
   # Merge experimental condition data (left join preserves all rows)
-  left_join(df_br_pt_conditions %>% select(id, Condition), by = "id") %>%
+  left_join(df_brpt_conditions %>% select(id, Condition), by = "id") %>%
   
   # Resolve condition conflicts: prioritize conditions.sav value if present
   # (Condition.y from conditions.sav, Condition.x from df_main1)
@@ -532,7 +532,7 @@ write_processed(df_main1_china, "CN_277273.sav")
 write_processed(df_sl, "SI_277273.sav")
 write_processed(df_it, "IT_277273.sav")
 write_processed(df_es, "ES_277273.sav")
-write_processed(df_br_pt, "BR_PT_277273.sav")
+write_processed(df_brpt, "BRPT_277273.sav")
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -894,7 +894,7 @@ write_processed(df_IN_99625, "IN_HI_999625.sav")
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # STEP 5: Process remaining languages from Main Survey 2
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-# LANGUAGES: Spanish (Mexico), Portuguese (Brazil), Chinese, Italian, Dutch,
+# LANGUAGES: Spanish (Mexico), Portuguese (Brazil & Portugal, mixed), Chinese, Italian, Dutch,
 #            Arabic, Indonesian, Malay, Russian, Turkish
 # STRATEGY: Group by language/country, apply country-specific filters, output separately
 
@@ -906,7 +906,7 @@ df_main2_other <- df_main_2 %>%
   mutate(
     country = case_when(
       startlanguage == "es-MX" ~ "MX",        # Spanish (Mexico)
-      startlanguage == "pt-BR" ~ "BR_PT",      # Portuguese (Brazil)
+      startlanguage == "pt-BR" ~ "BRPT",      # Portuguese (Brazil & Portugal, mixed)
       startlanguage %in% c("zh-Hans", "zh-Hant-HK") ~ "CN",  # Chinese (both variants)
       startlanguage %in% c("ar", "AR") ~ "IL_AR", # Arabic -> Israeli Arabic (using AR code but marked as IL_AR dataset)
       startlanguage == "ms" ~ "MY",            # Malay -> Malaysia
