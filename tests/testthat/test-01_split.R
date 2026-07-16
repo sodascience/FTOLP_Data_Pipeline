@@ -194,3 +194,55 @@ test_that("process_dataset skips the lastpage filter when filter_incomplete = FA
 
   expect_equal(nrow(out), 2) # the lastpage=-1 row is kept
 })
+
+test_that("keep_most_complete_row prefers status == 'complete' over any other status", {
+  env <- load_split_functions()
+  df <- tibble(
+    id = c("1", "1"), status = c("complete", "no_consent"),
+    FTOS_v2_1 = c(3, NA), Duration__in_seconds_ = c(1325, 7)
+  )
+  out <- env$keep_most_complete_row(df)
+  expect_equal(nrow(out), 1)
+  expect_equal(out$status, "complete")
+})
+
+test_that("keep_most_complete_row prefers fewest missing scale answers among equally-complete rows", {
+  env <- load_split_functions()
+  df <- tibble(
+    id = c("1", "1"), status = c("complete", "complete"),
+    FTOS_v2_1 = c(3, 3), FTOS_v2_2 = c(4, NA), Duration__in_seconds_ = c(100, 100)
+  )
+  out <- env$keep_most_complete_row(df)
+  expect_equal(nrow(out), 1)
+  expect_false(is.na(out$FTOS_v2_2))
+})
+
+test_that("keep_most_complete_row breaks remaining ties by longest duration, then most recent submission", {
+  env <- load_split_functions()
+  df <- tibble(
+    id = c("1", "1", "1"),
+    status = c("complete", "complete", "complete"),
+    FTOS_v2_1 = c(3, 3, 3),
+    Duration__in_seconds_ = c(1925, 1530, 1355),
+    RecordedDate = as.POSIXct(c("2021-11-10 10:52:40", "2021-11-11 09:19:54", "2021-11-12 09:53:58"))
+  )
+  out <- env$keep_most_complete_row(df)
+  expect_equal(nrow(out), 1)
+  expect_equal(out$Duration__in_seconds_, 1925) # longest duration wins, not most recent
+})
+
+test_that("keep_most_complete_row leaves rows with unique ids untouched", {
+  env <- load_split_functions()
+  df <- tibble(id = c("1", "2", "3"), FTOS_v2_1 = c(1, 2, 3))
+  out <- env$keep_most_complete_row(df)
+  expect_equal(nrow(out), 3)
+  expect_setequal(out$id, c("1", "2", "3"))
+})
+
+test_that("keep_most_complete_row is a no-op when the status/duration/recorded columns are absent", {
+  env <- load_split_functions()
+  df <- tibble(id = c("1", "1"), FTOS_v2_1 = c(3, NA))
+  out <- env$keep_most_complete_row(df)
+  expect_equal(nrow(out), 1)
+  expect_equal(out$FTOS_v2_1, 3) # fewer missing answers still breaks the tie
+})
