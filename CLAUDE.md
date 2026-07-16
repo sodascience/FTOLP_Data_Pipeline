@@ -14,7 +14,7 @@ src/
     03_merge.R             # Merge all cleaned files, standardize types, write to DIR_MERGED
   utils/
     cleaning_functions.R   # Step/group builders and all filter functions
-    merge_functions.R      # Schema extraction, label helpers, reason codes
+    merge_functions.R      # SPSS missing-value reason codes
     validation.R           # Loud-failure checks for dataset-name/config drift
 tests/
   testthat.R                # Test suite entry point
