@@ -67,6 +67,27 @@ test_that("COUNTRY_TRANSLATIONS does not attempt to translate compound free-text
   expect_false(any(free_text %in% names(COUNTRY_TRANSLATIONS)))
 })
 
+test_that("relabel_numeric attaches labels without changing the underlying numeric values, preserving missing codes", {
+  x <- labelled_spss(c(1, 5, 990, 999), labels = c(foo = 1), na_values = c(990, 991, 999))
+  out <- relabel_numeric(x, EDUCATION_LABELS)
+  expect_equal(as.numeric(unclass(out)), c(1, 5, 990, 999))
+  expect_equal(unname(val_labels(out)["Some primary school"]), 1)
+})
+
+test_that("EDUCATION_LABELS/EDUCATION_NL_LABELS/EDUCATION_SK_LABELS each cover exactly their scale's value range with no gaps", {
+  expect_equal(sort(unname(EDUCATION_LABELS)), 1:10)
+  expect_equal(sort(unname(EDUCATION_NL_LABELS)), 1:8)
+  expect_equal(sort(unname(EDUCATION_SK_LABELS)), 1:5)
+})
+
+test_that("OCCUPATION_SK_TRANSLATIONS covers every real Slovak occupation category", {
+  categories <- c(
+    "zamestnaný/á, SZČO, podnikateľ/ka", "nezamestnaný/á", "študujem",
+    "som na invalidnom dôchodku", "som na starobnom dôchodku"
+  )
+  expect_true(all(categories %in% names(OCCUPATION_SK_TRANSLATIONS)))
+})
+
 test_that("COUNTRY_TRANSLATIONS normalizes typo/case variants of the same country to one spelling", {
   expect_equal(unname(COUNTRY_TRANSLATIONS[c("South Africa", "south africa", "South africa")]),
                rep("South Africa", 3))
