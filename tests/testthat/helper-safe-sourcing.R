@@ -129,3 +129,15 @@ load_lps_goals_extractor <- function() {
   eval(parse(text = lines[start:end]), envir = env)
   env
 }
+
+# 03_merge.R: char_demo_cols is a single self-contained assignment (the list
+# of character columns padding-NA'd to "990" post-bind_rows) - safe to
+# extract directly.
+load_char_demo_cols <- function() {
+  lines <- .read_pipeline_lines("03_merge.R")
+  idx <- .find_marker(lines, "^char_demo_cols <- ", "03_merge.R", "char_demo_cols")
+
+  env <- new.env(parent = globalenv())
+  eval(parse(text = lines[idx]), envir = env)
+  env
+}
