@@ -171,3 +171,77 @@ translate_categorical <- function(x, lookup) {
   translated <- unname(lookup[x])
   unname(ifelse(is.na(translated), x, translated))
 }
+
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Education / Occupation
+# ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+# Education is a 1-10 ordinal question with the exact same numeric coding in
+# every dataset except NL/RS/SK (verified against every real dataset's raw
+# value labels): 1/2 = some/complete primary, 3/4 = some/complete secondary,
+# 5/6 = some/complete bachelor's, 7/8 = some/complete Master's, 9/10 =
+# some/complete Doctoral. The label TEXT differs by language (Portuguese
+# "Ensino fundamental incompleto", Italian "Non ho terminato la scuola
+# primaria", Arabic "لم اكمل الابتدائية", ...) but the VALUES are already
+# aligned, so unlike GENDER_TRANSLATIONS/COUNTRY_TRANSLATIONS this isn't a
+# value-remapping table - it's the single canonical English label set
+# re-attached to the (unchanged) numeric codes in 03_merge.R, since the
+# per-dataset label text would otherwise be stripped down to just the
+# missing-value codes during pre-merge label normalization (to prevent
+# bind_rows() label-conflict warnings across languages).
+EDUCATION_LABELS <- c(
+  "Some primary school"                       = 1,
+  "Complete primary school"                   = 2,
+  "Some secondary school"                     = 3,
+  "Complete secondary school"                 = 4,
+  "Some bachelor's degree, or equivalent"     = 5,
+  "Complete bachelor's degree, or equivalent" = 6,
+  "Some Master's degree"                      = 7,
+  "Complete Master's degree"                  = 8,
+  "Some Doctoral degree"                      = 9,
+  "Complete Doctoral degree"                  = 10
+)
+
+# NL's education question used the Dutch education system's own categories
+# (8 levels, not directly comparable to the 1-10 scale above) - kept as its
+# own Education_NL column, relabeled to English the same way as EDUCATION_LABELS.
+EDUCATION_NL_LABELS <- c(
+  "Primary school not completed"                          = 1,
+  "Primary school completed"                               = 2,
+  "Lower secondary / vocational (VMBO/MBO-1)"              = 3,
+  "Upper secondary (HAVO/VWO/MBO-2 to MBO-4)"              = 4,
+  "Bachelor's degree (HBO, applied sciences)"              = 5,
+  "Bachelor's degree (WO, academic)"                       = 6,
+  "Master's degree"                                        = 7,
+  "Doctorate"                                              = 8
+)
+
+# Slovakia's education question likewise used its own categories (5 levels) -
+# kept as its own Education_SK column.
+EDUCATION_SK_LABELS <- c(
+  "Primary school"                                    = 1,
+  "Secondary school without school-leaving exam"      = 2,
+  "Secondary school with school-leaving exam"         = 3,
+  "Bachelor's degree"                                 = 4,
+  "Master's degree or higher"                         = 5
+)
+
+# Slovakia's occupation question was a single 5-category choice (not the
+# binary checkboxes every other dataset used) - kept as its own
+# Occupation_SK column, translated the same way as GENDER_TRANSLATIONS/
+# COUNTRY_TRANSLATIONS (value remapping, since this is genuinely free-text
+# Slovak rather than an aligned numeric code).
+OCCUPATION_SK_TRANSLATIONS <- c(
+  "zamestnaný/á, SZČO, podnikateľ/ka" = "Employed / self-employed",
+  "nezamestnaný/á"                    = "Unemployed",
+  "študujem"                          = "Student",
+  "som na invalidnom dôchodku"        = "Disability pension",
+  "som na starobnom dôchodku"         = "Old-age pension / retired"
+)
+
+# Re-attaches a canonical English label set to an already-numeric ordinal
+# column (e.g. Education, 1-10) - unlike translate_categorical(), this does
+# not remap values, it only (re)labels them, preserving missing-value codes
+# via na_values.
+relabel_numeric <- function(x, labels, na_values = c(990, 991, 999)) {
+  labelled_spss(unclass(x), labels = labels, na_values = na_values)
+}
