@@ -105,6 +105,18 @@ load_merge_nationality_functions <- function() {
   env
 }
 
+# 03_merge.R: derive_source_country() is a self-contained function (no file
+# I/O) - safe to extract directly.
+load_derive_source_country <- function() {
+  lines <- .read_pipeline_lines("03_merge.R")
+  start <- .find_marker(lines, "^derive_source_country <- function", "03_merge.R", "derive_source_country()")
+  end <- .find_closing_brace_after(lines, start, "03_merge.R", "derive_source_country()")
+
+  env <- new.env(parent = globalenv())
+  eval(parse(text = lines[start:end]), envir = env)
+  env
+}
+
 # 03_merge.R: label_merge_NAs() is a self-contained function (only needs
 # reason_codes, already loaded from merge_functions.R via helper-setup.R).
 load_merge_nas_labeler <- function() {
