@@ -28,6 +28,24 @@ mk_group <- function(name, steps) {
   )
 }
 
+# Recursively walk a `steps` list (mk_step()/mk_group() output, or a bare
+# list(name=, fn=, datasets=) entry like the short-duration/US-external
+# filters in 02_clean.R) and collect every `datasets`/`exclude` token used
+# anywhere in it. Used by assert_datasets_exist() (src/utils/validation.R)
+# to catch dataset-name tokens that don't match any dataset actually present
+# at runtime, without having to hand-maintain a separate list of tokens.
+collect_dataset_tokens <- function(x) {
+  tokens <- character(0)
+  if (is.list(x)) {
+    if (!is.null(x$datasets)) tokens <- c(tokens, x$datasets)
+    if (!is.null(x$exclude))  tokens <- c(tokens, x$exclude)
+    for (el in x) {
+      if (is.list(el)) tokens <- c(tokens, collect_dataset_tokens(el))
+    }
+  }
+  unique(tokens)
+}
+
 get_age_numeric <- function(df, var_age = "Age") {
   x <- df[[var_age]]
   # if (inherits(x, "haven_labelled")) return(haven::as_numeric(x))
