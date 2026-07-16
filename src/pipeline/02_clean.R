@@ -54,6 +54,7 @@ library(here)
 # Load configuration and helper functions
 source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
+source(here::here("src", "utils", "validation.R"))
 
 # Load external US inclusion list for extra check
 external_us_file <- file.path(DIR_EXTERNAL, "DataSet US - Extra Check.sav")
@@ -82,6 +83,17 @@ file_list <- list.files(
 updated_file_list <- file_list %>%
   set_names(basename(.) %>% file_path_sans_ext()) %>%  # Name list by dataset name (without .sav)
   keep(~ !any(str_detect(., datasets_to_remove)))               # Exclude datasets in "datasets_to_remove" list
+
+# VALIDATE: every entry in datasets_to_remove should have matched at least one
+# file in DIR_SPLIT. A token that matches nothing means that dataset is
+# silently NOT being excluded (this exact failure mode let CH_999625/MS_999625
+# leftovers slip through cleaning before the CN/MY renames caught up everywhere).
+assert_datasets_exist(
+  datasets_to_remove,
+  basename(file_list),
+  context = "02_clean.R datasets_to_remove",
+  fixed = TRUE
+)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
@@ -487,6 +499,18 @@ base_steps <- list(
 steps <- c(
   base_steps,
   list(us_external_filter)
+)
+
+# VALIDATE: every dataset token referenced anywhere in `steps` (via DATASETS
+# groupings or hardcoded literals like "IT_AUTO") should match at least one
+# dataset actually present in this run. A token matching nothing means a
+# filter is silently never applied to anyone - the same failure mode as the
+# DATASETS$ch/DATASETS$cn key mismatch that used to make the China-specific
+# QC filters a silent no-op.
+assert_datasets_exist(
+  collect_dataset_tokens(steps),
+  names(updated_file_list),
+  context = "02_clean.R steps"
 )
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
