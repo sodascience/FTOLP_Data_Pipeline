@@ -45,9 +45,6 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# md files under docs
-docs/*.md
-
 # Mac system files
 .DS_Store
 
