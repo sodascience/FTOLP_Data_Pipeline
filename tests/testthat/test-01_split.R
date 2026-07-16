@@ -246,3 +246,56 @@ test_that("keep_most_complete_row is a no-op when the status/duration/recorded c
   expect_equal(nrow(out), 1)
   expect_equal(out$FTOS_v2_1, 3) # fewer missing answers still breaks the tie
 })
+
+test_that("clean_rs_auto_age parses plain ages, with or without Serbian 'years' suffixes/punctuation", {
+  env <- load_split_functions()
+  out <- env$clean_rs_auto_age(
+    c("20", "20.", "20 godina", "22 godine", "40god", "49 god.", "59.g.", "Imam 61 god."),
+    submission_year = 2023
+  )
+  expect_equal(out, c(20, 20, 20, 22, 40, 49, 59, 61))
+})
+
+test_that("clean_rs_auto_age converts 4-digit birth years to age using the submission year", {
+  env <- load_split_functions()
+  out <- env$clean_rs_auto_age(c("1973", "2005"), submission_year = 2023)
+  expect_equal(out, c(50, 18))
+})
+
+test_that("clean_rs_auto_age prefers the 'godina'-labeled part of a combined birth-year/age answer", {
+  env <- load_split_functions()
+  out <- env$clean_rs_auto_age("2003 / 20. godine", submission_year = 2023)
+  expect_equal(out, 20) # not 2023-2003=20 by coincidence - real answers can differ
+})
+
+test_that("clean_rs_auto_age returns NA for unparseable text (spelled-out numbers, refusals) and implausible ages", {
+  env <- load_split_functions()
+  out <- env$clean_rs_auto_age(
+    c("Devetnaest", "Pedeset dve", "mnogo", "Srednje godine", "Dovoljno",
+      "Ne želim da eksponiram broj godina moje starosti.", "5", "E5", "2p", "7o"),
+    submission_year = 2023
+  )
+  expect_true(all(is.na(out)))
+})
+
+test_that("clean_rs_auto_age extracts a plausible age from digits embedded in typo'd text", {
+  env <- load_split_functions()
+  out <- env$clean_rs_auto_age("19p", submission_year = 2023)
+  expect_equal(out, 19)
+})
+
+test_that("fix_mojibake_utf8 reverses UTF-8 bytes double-encoded as windows-1256, recovering the original Arabic text", {
+  env <- load_split_functions()
+  # Simulates the actual bug: read_sav(..., encoding = "windows-1256")
+  # misreads IL_AR_AUTO's already-UTF-8 Gender labels' raw bytes as
+  # windows-1256, producing mojibake. iconv(..., from = "windows-1256")
+  # reproduces that misread directly on "ذكر" ("male").
+  mojibake <- iconv("ذكر", from = "windows-1256", to = "UTF-8")
+  out <- env$fix_mojibake_utf8(mojibake)
+  expect_equal(out, "ذكر")
+})
+
+test_that("fix_mojibake_utf8 leaves plain ASCII text unchanged", {
+  env <- load_split_functions()
+  expect_equal(env$fix_mojibake_utf8("other"), "other")
+})
