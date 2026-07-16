@@ -63,6 +63,66 @@ write_processed <- function(df, filename) {
   message(sprintf("Saved: %s", output_path))
 }
 
+# Standardize FTOS/LPS column names to a specific survey-stage version
+# (e.g. "FTOS_1" -> "FTOS_v2_1"). Some raw exports have a duplicated prefix
+# ("FTOS_FTOS1" instead of "FTOS_1"); fix_duplicate_prefix handles that case.
+rename_scale_version <- function(df, version, fix_duplicate_prefix = FALSE) {
+  df <- df %>%
+    rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", paste0("FTOS_", version, "_\\1"))) %>%
+    rename_with(~ str_replace(.x, "^LPS_(\\d+)$", paste0("LPS_", version, "_\\1")))
+  if (fix_duplicate_prefix) {
+    df <- df %>%
+      rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", paste0("FTOS_", version, "_\\1"))) %>%
+      rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", paste0("LPS_", version, "_\\1")))
+  }
+  df
+}
+
+# Shared pipeline for the datasets that are a single raw file processed the
+# same way: read -> prefix id -> optional extra mutate(s) -> standardize
+# FTOS/LPS column names -> optional pre-normalize rename hook -> normalize
+# -> optionally drop incomplete responses -> write.
+#
+# Column renaming and the id-prefix mutate commute (normalize_column_names()
+# doesn't read/write id values, and the id mutate doesn't touch any columns
+# normalize_column_names() renames), so this fixed step order is safe even
+# for datasets whose original bespoke code did the id-prefix mutate last.
+#
+# Not every dataset fits this shape - multi-source merges (MZ, RU_AUTO_1,
+# BR_PILOT), id built from row number instead of original id (IL_AR_AUTO),
+# and country-splitting logic (MAIN SURVEY 1/2) stay as hand-written code.
+process_dataset <- function(raw_file,
+                            id_prefix,
+                            scale_version,
+                            output_file,
+                            fix_duplicate_prefix = FALSE,
+                            extra_mutate = NULL,
+                            pre_normalize_steps = NULL,
+                            filter_incomplete = TRUE,
+                            read_fn = read_raw) {
+  df <- read_fn(raw_file) %>%
+    mutate(id = str_c(id_prefix, id))
+
+  if (!is.null(extra_mutate)) {
+    df <- extra_mutate(df)
+  }
+
+  df <- df %>% rename_scale_version(scale_version, fix_duplicate_prefix)
+
+  if (!is.null(pre_normalize_steps)) {
+    df <- pre_normalize_steps(df)
+  }
+
+  df <- df %>% normalize_column_names()
+
+  if (filter_incomplete) {
+    df <- df %>% filter(lastpage != -1)
+  }
+
+  write_processed(df, output_file)
+  invisible(df)
+}
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Normalize and standardize column names across different survey versions
 # This ensures consistency when merging datasets from different countries/languages
@@ -681,19 +741,8 @@ write_processed(df_brazil_pilot_merged, "BR_PILOT.sav")
 # LANGUAGE: English
 # OUTPUT: IN_EN_824323.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-df_india <- read_raw("824323.sav") %>%
-  # Create ID with country/language prefix: IN_EN (English-India)
-  mutate(id = str_c("IN_EN_824323_", id)) %>%
-  
-  # Standardize to version 2 scale names (second stage)
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_india, "IN_EN_824323.sav")
+# ID prefix IN_EN reflects English-language India (second-stage scales)
+process_dataset("824323.sav", "IN_EN_824323_", "v2", "IN_EN_824323.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # ITALY ----
@@ -707,19 +756,8 @@ write_processed(df_india, "IN_EN_824323.sav")
 #       vs second wave "IT_AUTO" in the EXTRA DATASETS / ITALY EXTRA section)
 # OUTPUT: IT_855796.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-df_it3 <- read_raw("855796.sav") %>%
-  # Create ID with country prefix, mark as data collection wave 3
-  mutate(id = str_c("IT_855796_", id), strategy = "data collection 3") %>%
-  
-  # Standardize to version 2 scale names (second stage)
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-  
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_it3, "IT_855796.sav")
+process_dataset("855796.sav", "IT_855796_", "v2", "IT_855796.sav",
+  extra_mutate = \(df) df %>% mutate(strategy = "data collection 3"))
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -732,19 +770,9 @@ write_processed(df_it3, "IT_855796.sav")
 # NOTE: Second wave of US data collection (vs Oregon = first wave)
 # OUTPUT: US_868141.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-df_us1 <- read_raw("868141.sav") %>%
-  # Create ID with country prefix, mark as data collection wave 2
-  mutate(id = str_c("US_868141_", id), strategy = "data collection 2") %>%
-  
-  # Fix duplicate prefix in scale names: "FTOS_FTOS1" -> "FTOS_v1_1"
-  rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
-  
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_us1, "US_868141.sav")
+process_dataset("868141.sav", "US_868141_", "v1", "US_868141.sav",
+  fix_duplicate_prefix = TRUE,
+  extra_mutate = \(df) df %>% mutate(strategy = "data collection 2"))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # MAIN SURVEY 2 ----
@@ -959,19 +987,9 @@ df_main2_other <- df_main_2 %>%
 # NOTE: First wave of US data collection (vs 868141 = second wave)
 # OUTPUT: US_216254.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
-df_us_oregon <- read_raw("216254.sav") %>%
-  # Create ID with country prefix, mark as data collection wave 1
-  mutate(id = str_c("US_216254_", id), strategy = "data collection 1") %>%
-  
-  # Fix duplicate prefix in scale names: "FTOS_FTOS1" -> "FTOS_v1_1"
-  rename_with(~ str_replace(.x, "^FTOS_FTOS(\\d+)$", "FTOS_v1_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_LPS(\\d+)$", "LPS_v1_\\1")) %>%
-  
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_us_oregon, "US_216254.sav")
+process_dataset("216254.sav", "US_216254_", "v1", "US_216254.sav",
+  fix_duplicate_prefix = TRUE,
+  extra_mutate = \(df) df %>% mutate(strategy = "data collection 1"))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # NOTE: Combined US dataset creation (US_all.sav) is commented out
@@ -1011,19 +1029,7 @@ write_processed(df_us_oregon, "US_216254.sav")
 # OUTPUT: NL_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_nl_extra <- read_raw("Dataset NL.sav") %>%
-  # Create ID with NL prefix
-  mutate(id = str_c("NL_AUTO_", id)) %>%
-
-  # Standardize to version 2 scale names
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_nl_extra, "NL_AUTO.sav")
+process_dataset("Dataset NL.sav", "NL_AUTO_", "v2", "NL_AUTO.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # RUSSIA ----
@@ -1118,22 +1124,12 @@ write_processed(df_il_ar_auto, "IL_AR_AUTO.sav")
 # OUTPUT: ZA_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_sa <- read_raw("Dataset SA [full].sav") %>%
-  # Standardize to version 2 scale names
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-
-  # SPECIAL: Rename CAAS to CAAS_S (South African version)
-  # "CAAS_1" -> "CAAS_S_1" (distinguishes from standard CAAS)
-  rename_with(~ str_replace(.x, "^CAAS_(\\d+)$", "CAAS_S_\\1")) %>%
-
-  # Standard normalization
-  normalize_column_names() %>%
-
-  # Create ID with ZA prefix (South Africa = ZA)
-  mutate(id = str_c("ZA_AUTO_", id))
-
-write_processed(df_sa, "ZA_AUTO.sav")
+# SPECIAL: CAAS -> CAAS_S ("CAAS_1" -> "CAAS_S_1", distinguishes the South
+# African version from standard CAAS). No lastpage filter for this source.
+process_dataset("Dataset SA [full].sav", "ZA_AUTO_", "v2", "ZA_AUTO.sav",
+  pre_normalize_steps = \(df) df %>%
+    rename_with(~ str_replace(.x, "^CAAS_(\\d+)$", "CAAS_S_\\1")),
+  filter_incomplete = FALSE)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # ITALY EXTRA ----
@@ -1144,18 +1140,10 @@ write_processed(df_sa, "ZA_AUTO.sav")
 # SCALE VERSIONS: FTOS_v2, LPS_v2
 # NOTE: Second wave of extra Italian data (vs IT3 from Section 5)
 # OUTPUT: IT_AUTO.sav
-df_it2 <- read_raw("IT Autonomous.sav") %>%
-  # Standardize to version 2 scale names
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-
-  # Standard normalization
-  normalize_column_names() %>%
-
-  # Create ID with IT_AUTO prefix, mark as second wave
-  mutate(id = str_c("IT_AUTO_", id), strategy = "data collection 2")
-
-write_processed(df_it2, "IT_AUTO.sav")
+# No lastpage filter for this source (not all fields available)
+process_dataset("IT Autonomous.sav", "IT_AUTO_", "v2", "IT_AUTO.sav",
+  extra_mutate = \(df) df %>% mutate(strategy = "data collection 2"),
+  filter_incomplete = FALSE)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # RUSSIA Auto 2 ----
@@ -1166,19 +1154,7 @@ write_processed(df_it2, "IT_AUTO.sav")
 # OUTPUT: RU_AUTO_2.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_ru_auto_2 <- read_raw("RU autonomous 2.sav") %>%
-  # Create ID with RU prefix
-  mutate(id = str_c("RU_AUTO_2_", id)) %>%
-
-  # Standardize to version 2 scale names
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-
-  # Standard normalization and filter incomplete
-  normalize_column_names() %>%
-  filter(lastpage != -1)
-
-write_processed(df_ru_auto_2, "RU_AUTO_2.sav")
+process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav")
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SLOVAKIA ----
@@ -1189,22 +1165,13 @@ write_processed(df_ru_auto_2, "RU_AUTO_2.sav")
 # OUTPUT: SK_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-df_sk_auto <- read_raw("Slovakia autonomous.sav") %>%
-  # Create ID with SK prefix
-  mutate(id = str_c("SK_AUTO_", id)) %>%
-
-  # Standardize to version 2 scale names
-  rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
-  rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
-
-  # Fix LPS goals column naming
-  rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
-  rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
-
-  # Standard normalization
-  normalize_column_names()
-
-write_processed(df_sk_auto, "SK_AUTO.sav")
+# SPECIAL: Slovak raw export uses "ciel_#_1"/"ciel_#_2" for LPS goals content/age
+# instead of the standard LPSgoals naming. No lastpage filter for this source.
+process_dataset("Slovakia autonomous.sav", "SK_AUTO_", "v2", "SK_AUTO.sav",
+  pre_normalize_steps = \(df) df %>%
+    rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
+    rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")),
+  filter_incomplete = FALSE)
 
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
