@@ -22,7 +22,7 @@
 #   4. Short Duration: Remove responses submitted too quickly (<10 min; CN_277273 + US_868141 only)
 #   5. Zigzag Patterns: Remove alternating response patterns (1-7-1-7-1-7...)
 #   6. Atypical Response Patterns: Remove statistical outliers, combining Mahalanobis distance
-#      and Guttman errors per scale (thresholds differ for CN/US vs IT/BR_PT/SI datasets)
+#      and Guttman errors per scale (thresholds differ for CN/US vs IT/BRPT/SI datasets)
 #   7. US External Check: Remove US participants not found in an external inclusion dataset
 #      (matched by composite ID + age)
 #
@@ -62,12 +62,12 @@ external_us_df <- read_sav(external_us_file)
 # DATASET GROUPINGS: Define which datasets get which filters
 # These groupings are loaded from config/paths.R
 # They allow applying different filters to different subsets of data
-br_pt <- DATASETS$br_pt                    # Brazil & Portugal datasets
+brpt <- DATASETS$brpt                    # Brazil & Portugal datasets
 cn <- DATASETS$cn                          # China datasets
 us <- DATASETS$us                          # USA datasets                 
 cn_us_10_min <- DATASETS$cn_us_10_min      # Datasets to filter for <10 min duration
 first_stage <- DATASETS$first_stage        # All first-stage surveys
-first_stage_br_pt <- DATASETS$first_stage_br_pt  # Brazil/Portugal first-stage
+first_stage_brpt <- DATASETS$first_stage_brpt  # Brazil/Portugal first-stage
 datasets_to_remove <- DATASETS$datasets_to_remove            # Datasets to exclude from cleaning (e.g., removed datasets)
 
 # Get list of all split SPSS files to clean including files in subfolders
@@ -92,10 +92,10 @@ updated_file_list <- file_list %>%
 # RATIONALE: Can't calculate scale scores without complete data
 #
 # FILTERS:
-#   - FTOS_v1 missing: Remove if missing first-stage FTOS (except BR/PT)
+#   - FTOS_v1 missing: Remove if missing first-stage FTOS (except BRPT)
 #   - FTOS_v2 or LPS missing: Remove if missing second-stage scales
 #   - FTOS_pilot missing: Remove if missing pilot FTOS
-#   - FTOS or Psy_LOT missing: Remove if missing FTOS or LOT (BR/PT only)
+#   - FTOS or Psy_LOT missing: Remove if missing FTOS or LOT (BRPT only)
 #
 # NOTE: Different datasets use different scale versions (v1, v2, pilot)
 #       so need separate checks for each
@@ -107,7 +107,7 @@ filter_na <- mk_group("Missing response",
     mk_step(
       "FTOS_v1 missing",
       step_drop_na_block(),               # Default pattern checks FTOS_v1
-      exclude = br_pt                     # Don't apply to BR/PT datasets
+      exclude = brpt                     # Don't apply to BRPT datasets
     ),
     
     # Check 2: Second-stage scales (FTOS_v2 or LPS_v2)
@@ -115,7 +115,7 @@ filter_na <- mk_group("Missing response",
     mk_step(
       "FTOS_v2 or LPS missing",
       step_drop_na_block("^(FTOS_v2_\\d+|LPS_v2_\\d+)$"),  # Regex: FTOS_v2_1, LPS_v2_1, etc.
-      exclude = c(br_pt, "IT_AUTO")      # Skip BR/PT and Italian auto
+      exclude = c(brpt, "IT_AUTO")      # Skip BRPT and Italian auto
     ),
     
     # Check 3: Pilot FTOS
@@ -126,11 +126,11 @@ filter_na <- mk_group("Missing response",
     ),
     
     # Check 4: FTOS or Psy_LOT (Brazil/Portugal specific)
-    # BR/PT use different scale structure: FTOS (any version) + LOT scale
+    # BRPT use different scale structure: FTOS (any version) + LOT scale
     mk_step(
       "FTOS or Psy_LOT missing",
       step_drop_na_block("^(Psy_LOT\\d+|FTOS_(?:pilot|v1|v2)_\\d+)$"),  # LOT or any FTOS version
-      datasets = br_pt                    # ONLY apply to BR/PT datasets
+      datasets = brpt                    # ONLY apply to BRPT datasets
     )
   )
 )
@@ -144,7 +144,7 @@ filter_na <- mk_group("Missing response",
 #
 # SCALES CHECKED:
 #   - Core scales: FTOS_v1, FTOS_v2, FTOS_pilot, DGI, LOT
-#   - Country-specific: IPIP (BR/PT), LS (China), MLQ (BR/PT/CN/US), AS (BR/PT/CN/US), GRIT (US)
+#   - Country-specific: IPIP (BRPT), LS (China), MLQ (BRPT/CN/US), AS (BRPT/CN/US), GRIT (US)
 #
 # NOTE: Different datasets have different scales, so filters are targeted
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -180,7 +180,7 @@ constant_and_binary <- mk_group(
     mk_step(
       "IPIP",
       step_constant_answers(col_pattern = "^IPIP_\\d+$"),    # Big Five personality inventory
-      datasets = br_pt                                       # Only BR/PT datasets
+      datasets = brpt                                       # Only BRPT datasets
     ),
     
     # China-specific scale
@@ -190,17 +190,17 @@ constant_and_binary <- mk_group(
       datasets = cn                                          # Only Chinese datasets
     ),
     
-    # Multi-country scales (BR/PT, China, US)
+    # Multi-country scales (BRPT, China, US)
     mk_step(
       "MLQ",
       step_constant_answers(col_pattern = "^MLQ_\\d+$"),     # Meaning in Life Questionnaire
-      datasets = c(br_pt, cn, us)                             # BR/PT + China + US
+      datasets = c(brpt, cn, us)                             # BRPT + China + US
     ),
     
     mk_step(
       "AS",
       step_constant_answers(col_pattern = "^AS_\\d+$"),      # Authenticity Scale
-      datasets = c(br_pt, cn, us)                             # BR/PT + China + US
+      datasets = c(brpt, cn, us)                             # BRPT + China + US
     ),
     
     # US-specific scale
@@ -255,7 +255,7 @@ check_attention <- mk_group(
 #
 # SCALES CHECKED: Applied to all major scales, tailored by dataset content
 #   - Core: FTOS (v1, v2), LPS (v1, v2)
-#   - BR/PT: MLQ, AS, IPIP, HS
+#   - BRPT: MLQ, AS, IPIP, HS
 #   - China: MLQ, AS, CAAS, ESS, ESW
 #   - US: MLQ, AS, GRIT
 #   - Slovenia: DASS
@@ -290,30 +290,30 @@ remove_zigzag <- mk_group(
       datasets = c("IT_AUTO")                              # Italian auto only
     ),
 
-    # Multi-country scales (BR/PT, US, China)
+    # Multi-country scales (BRPT, US, China)
     mk_step(
       "MLQ",
       step_detect_zigzag(col_pattern = "^MLQ_\\d+$"),       # Meaning in Life Questionnaire
-      datasets = c(first_stage_br_pt, us, cn, "IT_AUTO")  # BR/PT + US + CN + IT
+      datasets = c(first_stage_brpt, us, cn, "IT_AUTO")  # BRPT + US + CN + IT
     ),
     
     mk_step(
       "AS",
       step_detect_zigzag(col_pattern = "^AS_\\d+$"),        # Authenticity Scale
-      datasets = c(first_stage_br_pt, us, cn, "IT_AUTO")  # BR/PT + US + CN + IT
+      datasets = c(first_stage_brpt, us, cn, "IT_AUTO")  # BRPT + US + CN + IT
     ),
 
     # Brazil/Portugal specific scales
     mk_step(
       "IPIP",
-      step_detect_zigzag(col_pattern = "^IPIP_\\d+$"),      # Big Five personality (BR/PT only)
-      datasets = first_stage_br_pt
+      step_detect_zigzag(col_pattern = "^IPIP_\\d+$"),      # Big Five personality (BRPT only)
+      datasets = first_stage_brpt
     ),
 
     mk_step(
       "HS",
-      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # HS scale (BR/PT only)
-      datasets = first_stage_br_pt
+      step_detect_zigzag(col_pattern = "^HS_\\d+$"),        # HS scale (BRPT only)
+      datasets = first_stage_brpt
     ),
 
     # China specific scales
@@ -381,15 +381,15 @@ scale_patterns_cn_us <- list(
   GRIT = "^GRIT_\\d+$"               # Grit Scale (US only)
 )
 
-scale_patterns_it_br_si <- list(
-  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BR_PT_277273, SI_277273)
+scale_patterns_it_brpt_si <- list(
+  FTOS_v1 = "^FTOS_v1_\\d+$",        # First-stage FTOS (IT_277273, BRPT_277273, SI_277273)
   FTOS_v2 = "^FTOS_v2_\\d+$",        # Second-stage FTOS (IT_AUTO)
-  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BR_PT_277273, SI_277273)
+  LPS_v1  = "^LPS_v1_\\d+$",         # First-stage LPS (IT_277273, BRPT_277273, SI_277273)
   LPS_v2  = "^LPS_v2_\\d+$",         # Second-stage LPS (IT_AUTO)
-  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BR_PT_277273, IT_AUTO)
-  AS      = "^AS_\\d+$",             # Authenticity Scale (BR_PT_277273, IT_AUTO)
-  IPIP    = "^IPIP_\\d+$",           # Big Five personality (BR_PT_277273 only)
-  HS      = "^HS_\\d+$",             # HS scale (BR_PT_277273 only)
+  MLQ     = "^MLQ_\\d+$",            # Meaning in Life Questionnaire (BRPT_277273, IT_AUTO)
+  AS      = "^AS_\\d+$",             # Authenticity Scale (BRPT_277273, IT_AUTO)
+  IPIP    = "^IPIP_\\d+$",           # Big Five personality (BRPT_277273 only)
+  HS      = "^HS_\\d+$",             # HS scale (BRPT_277273 only)
   DASS    = "^DASS_\\d+$",           # Depression Anxiety Stress Scales (SI_277273 only)
   IT      = "^IT_\\d+$",             # Italian Time Perspective (IT_277273, IT_AUTO)
   DMF     = "^DMF_\\d+$"             # Decision Making Fluency (IT_277273, IT_AUTO)
@@ -404,7 +404,7 @@ scale_patterns_it_br_si <- list(
 #   - Guttman errors per scale (|z| > 2)
 #   - Remove participants flagged in 2+ scales (Mahalanobis and/or Guttman)
 #
-# IT/BR_PT/SI STRATEGY:
+# IT/BRPT/SI STRATEGY:
 #   - Mahalanobis distance per scale (p < .001 AND M/df > 4.0); scales with
 #     ≤ 50% missing items are included using available items only
 #   - Guttman errors per scale (|z| > 2); complete responses only
@@ -427,7 +427,7 @@ atypical_patterns <- mk_group(
     mk_step(
       "Mahalanobis (p<.001 AND M/df>4.0) + Guttman (>50% AND >=2 scales)",
       step_atypical_patterns(
-        scale_patterns_it_br_si,
+        scale_patterns_it_brpt_si,
         md_p = 0.001,
         md_ratio_thresh = 4.0,
         g_z_thresh = 2,
@@ -436,7 +436,7 @@ atypical_patterns <- mk_group(
         use_partial = FALSE,
         scale_flag_logic = "OR"
       ),
-      datasets = c("IT_277273", "IT_AUTO", "BR_PT_277273", "SI_277273")
+      datasets = c("IT_277273", "IT_AUTO", "BRPT_277273", "SI_277273")
     )
   )
 )
@@ -480,7 +480,7 @@ base_steps <- list(
   # Zigzag pattern filter
   remove_zigzag,
   
-  # Atypical response pattern detection (CN/US, and IT/BR_PT/SI with different thresholds)
+  # Atypical response pattern detection (CN/US, and IT/BRPT/SI with different thresholds)
   atypical_patterns
 )
 
