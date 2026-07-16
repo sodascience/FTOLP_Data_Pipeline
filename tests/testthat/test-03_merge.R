@@ -131,7 +131,7 @@ test_that("extract_lps_goals pulls id + LPSgoal*_content/_age columns, skipping 
   expect_false("FTOS_v1_1" %in% names(out))
 })
 
-test_that("extract_lps_goals standardizes types across datasets so bind_rows doesn't error (regression: RU_AUTO_1's id/age are numeric)", {
+test_that("extract_lps_goals standardizes types across datasets so bind_rows doesn't error (regression: a dataset with a numeric id/age column used to break bind_rows)", {
   env <- load_lps_goals_extractor()
   dfs <- list(
     CHAR_DS = tibble(
@@ -139,7 +139,7 @@ test_that("extract_lps_goals standardizes types across datasets so bind_rows doe
       LPSgoal1_content = "learn to code", LPSgoal1_age = "25"
     ),
     NUMERIC_DS = tibble(
-      id = 2, source_dataset = "NUMERIC_DS", # id stored as numeric, like RU_AUTO_1
+      id = 2, source_dataset = "NUMERIC_DS", # id stored as numeric
       LPSgoal1_content = "travel", LPSgoal1_age = 40 # age already numeric
     )
   )
@@ -174,4 +174,15 @@ test_that("extract_lps_goals returns an empty (zero-row) tibble, not an error, w
   dfs <- list(A = tibble(id = "A_1", source_dataset = "A", FTOS_v1_1 = 1))
   out <- env$extract_lps_goals(dfs)
   expect_equal(nrow(out), 0)
+})
+
+test_that("char_demo_cols pads all demographic character columns to '990', not just Nationality/Origin", {
+  # Regression test: Sex/Gender_v1/Gender_v2/Gender_other/Gender_final used to
+  # be left as "" (haven's SPSS round-trip of a padding NA) instead of "990"
+  # like Nationality/Origin, for datasets that never collected them.
+  env <- load_char_demo_cols()
+  expect_setequal(
+    env$char_demo_cols,
+    c("Nationality", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final")
+  )
 })
