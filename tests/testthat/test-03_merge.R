@@ -176,13 +176,86 @@ test_that("extract_lps_goals returns an empty (zero-row) tibble, not an error, w
   expect_equal(nrow(out), 0)
 })
 
-test_that("char_demo_cols pads all demographic character columns to '990', not just Nationality/Origin", {
-  # Regression test: Sex/Gender_v1/Gender_v2/Gender_other/Gender_final used to
-  # be left as "" (haven's SPSS round-trip of a padding NA) instead of "990"
-  # like Nationality/Origin, for datasets that never collected them.
+test_that("char_demo_cols pads every categorical_cols column (minus id/source_dataset) to '990', not a hand-picked subset", {
+  # Regression test: Sex/Gender_v1/Gender_v2/Gender_other/ImmigrationCountry
+  # used to be left as "" (haven's SPSS round-trip of a padding NA) instead
+  # of "990" like Nationality/Origin, for datasets that never collected them.
+  # char_demo_cols is now derived from categorical_cols so a newly added
+  # categorical column can't be forgotten here again.
   env <- load_char_demo_cols()
   expect_setequal(
     env$char_demo_cols,
-    c("Nationality", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final")
+    c("Nationality", "Origin", "ImmigrationCountry", "Sex", "Gender_v1", "Gender_v2", "Gender_other")
   )
+  expect_false(any(c("id", "source_dataset") %in% env$char_demo_cols))
+})
+
+test_that("labelled_categorical_to_character renders missing-value codes as their numeric string, not the English label", {
+  # Regression test: genuine non-response in a categorical column used to
+  # decode to the literal word "missing" (from as_factor()'s label text for
+  # 999) instead of "999", inconsistent with how numeric columns and
+  # char_demo_cols' post-merge padding both display missing codes.
+  env <- load_labelled_categorical_to_character()
+  col_data <- labelled_spss(
+    c(1, 2, 999, 990, 991),
+    labels = c("Mulher" = 1, "Homem" = 2, "by_design" = 990, "technical_error" = 991, "missing" = 999),
+    na_values = c(990, 991, 999)
+  )
+  out <- env$labelled_categorical_to_character(col_data)
+  expect_equal(out, c("Mulher", "Homem", "999", "990", "991"))
+})
+
+test_that("labelled_categorical_to_character leaves real value labels untouched", {
+  env <- load_labelled_categorical_to_character()
+  col_data <- labelled_spss(
+    c(1, 2, 666),
+    labels = c("Mulher" = 1, "Homem" = 2, "other" = 666),
+    na_values = c(990, 991, 999)
+  )
+  out <- env$labelled_categorical_to_character(col_data)
+  expect_equal(out, c("Mulher", "Homem", "other"))
+})
+
+test_that("normalize_categorical_column codes blank ('' or NA) responses in an already-character column as '999'", {
+  # Regression test: Gender_other (an open-ended free-text field) is plain
+  # character from the raw data, so it never passes through the
+  # labelled-numeric missing-value step - a blank response there used to
+  # stay a literal "" instead of being coded "999" like every other
+  # categorical column's genuine non-response.
+  env <- load_normalize_categorical_column()
+  out <- env$normalize_categorical_column(c("Non-binary", "", NA, "Agender"))
+  expect_equal(out, c("Non-binary", "999", "999", "Agender"))
+})
+
+test_that("normalize_categorical_column still routes labelled columns through labelled_categorical_to_character", {
+  env <- load_normalize_categorical_column()
+  col_data <- labelled_spss(
+    c(1, 999),
+    labels = c("Mulher" = 1, "missing" = 999),
+    na_values = c(990, 991, 999)
+  )
+  out <- env$normalize_categorical_column(col_data)
+  expect_equal(out, c("Mulher", "999"))
+})
+
+test_that("the categorical translation step in 03_merge.R translates Sex/Gender_*/Nationality/Origin/ImmigrationCountry and keeps '<column>_original', while leaving Gender_other untouched", {
+  merged_df <- tibble(
+    id = "A_1", source_dataset = "A",
+    Sex = "Mulher", Gender_v1 = "Homem", Gender_v2 = "990",
+    Nationality = "Brasil", Origin = "999", ImmigrationCountry = "no",
+    Gender_other = "Non-binary"
+  )
+  out <- load_categorical_translation_step(merged_df)
+
+  expect_equal(out$Sex, "Female")
+  expect_equal(out$Sex_original, "Mulher")
+  expect_equal(out$Gender_v1, "Male")
+  expect_equal(out$Gender_v2, "990") # missing code, untouched
+  expect_equal(out$Nationality, "Brazil")
+  expect_equal(out$Origin, "999") # missing code, untouched
+  expect_equal(out$ImmigrationCountry, "no") # not a recognized country, passes through
+  expect_equal(out$ImmigrationCountry_original, "no")
+
+  expect_false("Gender_other_original" %in% names(out))
+  expect_equal(out$Gender_other, "Non-binary")
 })
