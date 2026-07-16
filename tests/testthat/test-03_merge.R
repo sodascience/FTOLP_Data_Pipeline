@@ -93,3 +93,23 @@ test_that("reason_codes has exactly the 3 SPSS-allowed missing-value codes (990/
   expect_equal(unname(reason_codes[["missing"]]), 999)
   expect_length(reason_codes, 3)
 })
+
+test_that("numerical_cols' scale-item derivation (SCALE_PATTERNS matched against all_cols) covers every scale, not just FTOS/LPS", {
+  # Regression test for the bug found this session: numerical_cols used to be
+  # built from a single hand-written "^(FTOS|LPS)_(pilot|v1|v2)_\\d+$" regex,
+  # so select(any_of(relevant_cols)) silently dropped every other scale
+  # (CAAS, MLQ, AS, IPIP, GRIT, DASS, IT, DMF, Psy_DGI/Psy_LOT, HS, ES,
+  # ESW_PS, CAAS_S, Psy_CIPIP, ...) from the merged dataset. This mirrors the
+  # exact derivation now in 03_merge.R.
+  all_cols <- c(
+    "id", "FTOS_v1_1", "LPS_v1_1", "CAAS_1", "CAAS_S_1", "MLQ_1", "AS_1",
+    "IPIP_1", "GRIT_1", "DASS_1", "IT_1", "DMF_1", "Psy_DGI1", "Psy_LOT1",
+    "HS_1", "ES_1", "ESW_PS1", "BRS_1", "FS_SES1", "Psy_CIPIP1",
+    "FTOS_x", "LPS_x", "CAAS_x", # attention-check columns, must NOT be swept in
+    "SomeUnrelatedColumn"
+  )
+  scale_item_cols <- unique(unlist(lapply(SCALE_PATTERNS, function(p) grep(p, all_cols, value = TRUE))))
+
+  expected <- setdiff(all_cols, c("id", "FTOS_x", "LPS_x", "CAAS_x", "SomeUnrelatedColumn"))
+  expect_setequal(scale_item_cols, expected)
+})
