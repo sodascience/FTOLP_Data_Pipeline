@@ -20,6 +20,25 @@ test_that("is_country_nationality correctly routes each stage: pilot, first_stag
   expect_false(env$is_country_nationality("NL_AUTO_clean"))
 })
 
+test_that("derive_source_country extracts the country code (token before the first underscore) from source_dataset", {
+  env <- load_derive_source_country()
+  out <- env$derive_source_country(c(
+    "CN_277273_clean", "BRPT_277273_clean", "MZ_clean", "RU_AUTO_1_clean", "RU_AUTO_2_clean"
+  ))
+  expect_equal(out, c("CN", "BRPT", "MZ", "RU", "RU"))
+})
+
+test_that("derive_source_country collapses language-suffixed datasets to the bare country code", {
+  env <- load_derive_source_country()
+  out <- env$derive_source_country(c("IL_AR_999625_clean", "IL_AR_AUTO_clean", "IN_HI_999625_clean", "IN_EN_824323_clean"))
+  expect_equal(out, c("IL", "IL", "IN", "IN"))
+})
+
+test_that("derive_source_country maps BR_PILOT to 'BR' (its country), not 'BR_PILOT'", {
+  env <- load_derive_source_country()
+  expect_equal(env$derive_source_country("BR_PILOT_clean"), "BR")
+})
+
 test_that("get_citizen_pattern routes BR_PILOT to the same pattern as BRPT (regression test for the case-mismatch fix)", {
   # Before BR_PILOT.sav was capitalized to match DATASETS$pilot, and before
   # get_citizen_pattern()'s fallback was fixed from "^br_" to "^BR_PILOT",
