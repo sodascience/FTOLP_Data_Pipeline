@@ -16,6 +16,7 @@ source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "cleaning_functions.R"))
 source(here::here("src", "utils", "validation.R"))
 source(here::here("src", "utils", "merge_functions.R"))
+source(here::here("config", "scales.R"))  # depends on mk_step() from cleaning_functions.R
 
 # DEFENSE IN DEPTH: neutralize the real data-directory paths for the whole
 # test session, in addition to the safe-extraction helpers in
