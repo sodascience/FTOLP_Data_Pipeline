@@ -34,7 +34,11 @@ FTOLP_Data_Pipeline/
 │   │   └── 03_merge.R             # Merge cleaned datasets
 │   ├── utils/                     # Utility functions
 │   │   ├── cleaning_functions.R   # Core cleaning utilities (e.g., steps, filters, outlier detection)
-│   │   ├── merge_functions.R      # Merging and labeling utilities
+│   │   ├── merge_functions.R      # SPSS missing-value reason codes
+│   │   ├── validation.R           # Loud-failure checks for dataset-name/config drift
+├── tests/
+│   ├── testthat.R                 # Test suite entry point
+│   └── testthat/                  # Unit tests
 ├── docs/                          # Additional documentation
 ├── README.md                      # This file
 └── LICENSE                        # MIT License
@@ -222,11 +226,8 @@ Core cleaning utilities:
 - `build_wide_summary()`: Generate removal audit reports
 
 #### `merge_functions.R`
-Merging and labeling utilities:
+Defines `reason_codes`, the SPSS missing-value reason codes used throughout `03_merge.R` (e.g. by `label_merge_NAs()`):
 
-- `get_schema()`: Extract variable labels, value labels, and metadata
-- `apply_schema_from()`: Apply label schema from one variable to another
-- `augment_with_reasons()`: Add missing value reason codes
 - **Missing value codes** (SPSS allows max 3 user-missing values per variable):
   - 990: `by_design` — variable not collected in this dataset (padding NA from merge)
   - 991: `technical_error` — known data issue (e.g. NL dataset LPS_v2_6 items 1–97)
