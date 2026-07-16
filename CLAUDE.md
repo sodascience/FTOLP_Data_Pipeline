@@ -10,11 +10,15 @@ config/
 src/
   pipeline/
     01_split.R             # Load raw .sav files, split by country/language, write to DIR_SPLIT
-    02_clean.R             # Apply 8 QC filters, write to DIR_CLEAN + audit Excel
+    02_clean.R             # Apply 7 QC filters, write to DIR_CLEAN + audit Excel
     03_merge.R             # Merge all cleaned files, standardize types, write to DIR_MERGED
   utils/
     cleaning_functions.R   # Step/group builders and all filter functions
     merge_functions.R      # Schema extraction, label helpers, reason codes
+    validation.R           # Loud-failure checks for dataset-name/config drift
+tests/
+  testthat.R                # Test suite entry point
+  testthat/                 # Unit tests (see "Testing" below)
 setup.R                    # One-time install; restores renv packages
 archive/                   # Old scripts, docs, analysis files — ignore entirely
 ```
@@ -212,6 +216,15 @@ is.na(unclassed)  # TRUE only for genuine R NAs
 
 This pattern appears in `label_merge_NAs()` and must be preserved if that function is modified.
 
+## Testing
+
+Run the test suite from the project root:
+```r
+Rscript -e "testthat::test_dir('tests/testthat')"
+```
+
+`01_split.R`/`02_clean.R`/`03_merge.R` are never sourced directly by the tests — they read/write real survey data from `DATA_ROOT` (a Nextcloud-synced path that exists on some machines), so `source()`-ing one runs the real pipeline against real data. `tests/testthat/helper-safe-sourcing.R` extracts only the specific function/object definitions under test using text markers, and `tests/testthat/helper-setup.R` additionally points `DIR_RAW`/`DIR_SPLIT`/`DIR_CLEAN`/`DIR_MERGED` at a nonexistent sandbox directory for the whole test session as a second line of defense. If you add tests that need to exercise more of a pipeline script, extend `helper-safe-sourcing.R` rather than sourcing the script directly.
+
 ## Package management
 
 Uses `renv`. To restore the locked environment:
@@ -219,4 +232,4 @@ Uses `renv`. To restore the locked environment:
 renv::restore()
 ```
 
-Key packages: `tidyverse`, `haven`, `labelled`, `PerFit`, `writexl`, `here`, `rstatix`.
+Key packages: `tidyverse`, `haven`, `labelled`, `PerFit`, `writexl`, `here`, `rstatix`, `testthat`.
