@@ -685,8 +685,10 @@ merged_df <- label_merge_NAs(bind_rows(dfs))
 # Numeric padding NAs are already handled inside label_merge_NAs(); character columns
 # need separate treatment because SPSS user-missing codes only apply to numeric variables.
 # At this point any remaining NA in these columns must be a padding NA (the column did
-# not exist in that source dataset) because within-dataset NAs were already marked "999".
-char_demo_cols <- c("Nationality", "Origin")
+# not exist in that source dataset) because within-dataset NAs were already marked "999"
+# (labeled "missing") before the categorical-to-character conversion above, for every
+# column in categorical_cols - not just Nationality/Origin.
+char_demo_cols <- c("Nationality", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final")
 for (col in char_demo_cols) {
   if (col %in% names(merged_df)) {
     merged_df[[col]][is.na(merged_df[[col]])] <- "990"
