@@ -193,6 +193,8 @@ Key operations in order:
 9. **Padding NA labeling** via `label_merge_NAs()`: replace `NA`s introduced by `bind_rows()` with `990` ("by design")
 10. Export as `.sav`, `.csv`, `.xlsx` to `DIR_MERGED`
 
+**LPSgoal\* file**: `LPSgoal#_content` (free-text goal description) and `LPSgoal#_age` (target age) columns are open-ended per-goal items, not part of `relevant_cols`. `extract_lps_goals()` pulls `id` + all `LPSgoal*` columns from each dataset (before step 4's column selection would otherwise drop them) and writes them separately as `lps_goals.sav`/`.csv`/`.xlsx` to `DIR_MERGED`, joinable back to `merged_dataset` via `id`. Unanswered items are left as plain `NA` (this extraction runs before step 6's missing-value coding).
+
 ## Missing value codes
 
 These are numeric codes stored in SPSS user-missing slots (`na_values`):
