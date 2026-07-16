@@ -130,14 +130,68 @@ load_lps_goals_extractor <- function() {
   env
 }
 
-# 03_merge.R: char_demo_cols is a single self-contained assignment (the list
-# of character columns padding-NA'd to "990" post-bind_rows) - safe to
-# extract directly.
+# 03_merge.R: char_demo_cols (the list of character columns padding-NA'd to
+# "990" post-bind_rows) is derived from categorical_cols - extract both
+# assignments, in file order, so the derivation actually runs.
 load_char_demo_cols <- function() {
   lines <- .read_pipeline_lines("03_merge.R")
-  idx <- .find_marker(lines, "^char_demo_cols <- ", "03_merge.R", "char_demo_cols")
+  cat_start <- .find_marker(lines, "^categorical_cols <- c\\(", "03_merge.R", "categorical_cols")
+  cat_rel_end <- which(grepl("^\\)$", lines[(cat_start + 1):length(lines)]))[1]
+  if (is.na(cat_rel_end)) {
+    stop("Could not find closing ')' for categorical_cols in 03_merge.R - the test helper extraction needs updating.", call. = FALSE)
+  }
+  cat_end <- cat_start + cat_rel_end
+  demo_idx <- .find_marker(lines, "^char_demo_cols <- ", "03_merge.R", "char_demo_cols")
 
   env <- new.env(parent = globalenv())
-  eval(parse(text = lines[idx]), envir = env)
+  eval(parse(text = lines[cat_start:cat_end]), envir = env)
+  eval(parse(text = lines[demo_idx]), envir = env)
   env
+}
+
+# 03_merge.R: labelled_categorical_to_character() is a self-contained
+# function (its na_values default reads all_na_values from the enclosing
+# environment, so pre-seed that too) - no file I/O.
+load_labelled_categorical_to_character <- function() {
+  lines <- .read_pipeline_lines("03_merge.R")
+  start <- .find_marker(lines, "^labelled_categorical_to_character <- function", "03_merge.R", "labelled_categorical_to_character()")
+  end <- .find_closing_brace_after(lines, start, "03_merge.R", "labelled_categorical_to_character()")
+
+  env <- new.env(parent = globalenv())
+  env$all_na_values <- c(990, 991, 999)
+  eval(parse(text = lines[start:end]), envir = env)
+  env
+}
+
+# 03_merge.R: normalize_categorical_column() calls
+# labelled_categorical_to_character(), so extract both (in file order) plus
+# the all_na_values it depends on.
+load_normalize_categorical_column <- function() {
+  lines <- .read_pipeline_lines("03_merge.R")
+  labelled_start <- .find_marker(lines, "^labelled_categorical_to_character <- function", "03_merge.R", "labelled_categorical_to_character()")
+  labelled_end <- .find_closing_brace_after(lines, labelled_start, "03_merge.R", "labelled_categorical_to_character()")
+  normalize_start <- .find_marker(lines, "^normalize_categorical_column <- function", "03_merge.R", "normalize_categorical_column()")
+  normalize_end <- .find_closing_brace_after(lines, normalize_start, "03_merge.R", "normalize_categorical_column()")
+
+  env <- new.env(parent = globalenv())
+  env$all_na_values <- c(990, 991, 999)
+  eval(parse(text = lines[labelled_start:labelled_end]), envir = env)
+  eval(parse(text = lines[normalize_start:normalize_end]), envir = env)
+  env
+}
+
+# 03_merge.R: the categorical-translation step (gender_cols/country_cols +
+# the two "<column>_original" for loops) operates directly on `merged_df`,
+# which we pre-seed. It calls translate_categorical() and needs
+# GENDER_TRANSLATIONS/COUNTRY_TRANSLATIONS, both from config/translations.R.
+load_categorical_translation_step <- function(merged_df) {
+  lines <- .read_pipeline_lines("03_merge.R")
+  start <- .find_marker(lines, "^gender_cols <- intersect", "03_merge.R", "start of categorical translation step")
+  end <- .find_marker(lines, "^# Rearrange columns", "03_merge.R", "end of categorical translation step") - 1
+
+  env <- new.env(parent = globalenv())
+  source(here::here("config", "translations.R"), local = env)
+  env$merged_df <- merged_df
+  eval(parse(text = lines[start:end]), envir = env)
+  env$merged_df
 }
