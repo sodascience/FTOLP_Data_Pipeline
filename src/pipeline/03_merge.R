@@ -117,14 +117,14 @@ is_country_nationality <- function(df_name) {
 }
 
 # Multilingual pattern for "yes / is a citizen"
-# Languages inferred from dataset name prefixes (CN, EN, ES, IT, BR_PT, SI, NL)
+# Languages inferred from dataset name prefixes (CN, EN, ES, IT, BRPT, SI, NL)
 # plus additional languages anticipated in second-stage data collection
 citizen_yes_pattern <- paste0(
   "^(",
   "yes",            # English (EN)
   "|ja",            # German (DE), Dutch (NL), Slovenian (SI), Scandinavian
   "|s[i\u00ed\u00ec]", # Spanish s\u00ed (ES), Italian s\u00ec (IT), informal si
-  "|sim",           # Portuguese (BR_PT)
+  "|sim",           # Portuguese (BRPT)
   "|oui",           # French (FR)
   "|да",            # Russian (RU), Bulgarian, Serbian/Macedonian Cyrillic
   "|tak",           # Polish (PL)
@@ -156,7 +156,7 @@ citizen_yes_pattern <- paste0(
 #   CN_*    : Chinese labels — Mainland China, HK, Macau, Taiwan
 #   ES_*    : Spanish labels — España / Spain
 #   IT_*    : Italian labels — Italia / Italy
-#   BR_PT_* : Portuguese labels — Brasil / Brazil, Portugal
+#   BRPT_*  : Portuguese labels — Brasil / Brazil, Portugal (mixed pool, not separable)
 #   SI_*    : Slovenian labels — Slovenija / Slovenia
 #   US_*    : English labels — United States / USA
 citizen_country_patterns <- list(
@@ -169,7 +169,7 @@ citizen_country_patterns <- list(
   ),
   ES    = "Espa\u00f1a|Espana|Spain",            # España
   IT    = "Italia|Italy|Itália",
-  BR_PT = "Brasil|Brazil|Portugal",
+  BRPT  = "Brasil|Brazil|Portugal",
   SI    = "Slovenija|Slovenia",
   US    = paste0(
     "United States|United States of America|USA|U\\.S\\.A\\.",
@@ -182,7 +182,7 @@ get_citizen_pattern <- function(df_name) {
   if      (grepl("^CN",           df_name)) citizen_country_patterns[["CN"]]
   else if (grepl("^ES",           df_name)) citizen_country_patterns[["ES"]]
   else if (grepl("^IT",           df_name)) citizen_country_patterns[["IT"]]
-  else if (grepl("^BR_PT|^br_",   df_name)) citizen_country_patterns[["BR_PT"]]
+  else if (grepl("^BRPT|^BR_PILOT", df_name)) citizen_country_patterns[["BRPT"]]
   else if (grepl("^SI",           df_name)) citizen_country_patterns[["SI"]]
   else if (grepl("^US",           df_name)) citizen_country_patterns[["US"]]
   else NULL
