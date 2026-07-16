@@ -123,6 +123,30 @@ process_dataset <- function(raw_file,
   invisible(df)
 }
 
+# Some raw "AUTO" source files have duplicate values in their own id column -
+# e.g. Slovakia's export has 27 ids shared by 2-4 rows each, most of them one
+# complete submission plus an abandoned/no-consent attempt, but a few with
+# multiple genuinely complete submissions under the same id (same participant
+# invited back, or a platform quirk). Keep only the most complete row per id:
+#   1. Prefer status == "complete" (a Qualtrics-style field; ignored if absent)
+#   2. Then fewest missing answers among columns matching `scale_pattern`
+#   3. Then longest response duration (Duration__in_seconds_, if present)
+#   4. Then most recent submission (RecordedDate, if present) as a final tiebreak
+keep_most_complete_row <- function(df, id_col = "id", scale_pattern = "^(FTOS|LPS)_v2_\\d+$") {
+  scale_cols <- grep(scale_pattern, names(df), value = TRUE)
+
+  df %>%
+    mutate(
+      .is_complete = if ("status" %in% names(df)) as.integer(status == "complete") else 1L,
+      .n_answered  = if (length(scale_cols) > 0) rowSums(!is.na(across(all_of(scale_cols)))) else 0L,
+      .duration    = if ("Duration__in_seconds_" %in% names(df)) suppressWarnings(as.numeric(Duration__in_seconds_)) else 0,
+      .recorded    = if ("RecordedDate" %in% names(df)) RecordedDate else as.POSIXct(NA)
+    ) %>%
+    arrange(.data[[id_col]], desc(.is_complete), desc(.n_answered), desc(.duration), desc(.recorded)) %>%
+    distinct(.data[[id_col]], .keep_all = TRUE) %>%
+    select(-.is_complete, -.n_answered, -.duration, -.recorded)
+}
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Normalize and standardize column names across different survey versions
 # This ensures consistency when merging datasets from different countries/languages
@@ -1167,10 +1191,15 @@ process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav")
 
 # SPECIAL: Slovak raw export uses "ciel_#_1"/"ciel_#_2" for LPS goals content/age
 # instead of the standard LPSgoals naming. No lastpage filter for this source.
+# The raw file's own id column has 27 duplicate values (one participant's
+# session id was reused for another attempt in most cases, but a few ids have
+# multiple genuinely complete submissions) - keep_most_complete_row() resolves
+# these so the output written to DIR_SPLIT has unique ids.
 process_dataset("Slovakia autonomous.sav", "SK_AUTO_", "v2", "SK_AUTO.sav",
   pre_normalize_steps = \(df) df %>%
     rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
-    rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")),
+    rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
+    keep_most_complete_row(),
   filter_incomplete = FALSE)
 
 
