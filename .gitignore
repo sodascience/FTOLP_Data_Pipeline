@@ -39,11 +39,17 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pkgdown site
-docs/
-
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Mac system files
+.DS_Store
+
+# logs
+logs/
+
+# archived files
+archive/

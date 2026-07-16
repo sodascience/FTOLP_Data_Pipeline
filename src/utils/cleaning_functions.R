@@ -28,6 +28,24 @@ mk_group <- function(name, steps) {
   )
 }
 
+# Recursively walk a `steps` list (mk_step()/mk_group() output, or a bare
+# list(name=, fn=, datasets=) entry like the short-duration/US-external
+# filters in 02_clean.R) and collect every `datasets`/`exclude` token used
+# anywhere in it. Used by assert_datasets_exist() (src/utils/validation.R)
+# to catch dataset-name tokens that don't match any dataset actually present
+# at runtime, without having to hand-maintain a separate list of tokens.
+collect_dataset_tokens <- function(x) {
+  tokens <- character(0)
+  if (is.list(x)) {
+    if (!is.null(x$datasets)) tokens <- c(tokens, x$datasets)
+    if (!is.null(x$exclude))  tokens <- c(tokens, x$exclude)
+    for (el in x) {
+      if (is.list(el)) tokens <- c(tokens, collect_dataset_tokens(el))
+    }
+  }
+  unique(tokens)
+}
+
 get_age_numeric <- function(df, var_age = "Age") {
   x <- df[[var_age]]
   # if (inherits(x, "haven_labelled")) return(haven::as_numeric(x))
@@ -123,7 +141,6 @@ step_constant_answers <- function(col_pattern = "^FTOS_v1_\\d+$") {
     })
     block <- as.data.frame(block, stringsAsFactors = FALSE)
 
-    non_na <- rowSums(!is.na(block))
     all_same <- apply(block, 1L, function(r) {
       vals <- r[!is.na(r)]
       if (length(vals) < length(have)) {
@@ -150,12 +167,13 @@ to_numeric <- function(x) {
 
 step_guttman <- function(scale_patterns,
                          z_thresh = 2,
-                         max_fails = 2) {
+                         fail_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
   function(df) {
     fail_flags <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
       cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
@@ -169,13 +187,11 @@ step_guttman <- function(scale_patterns,
       if (all(vapply(mat, function(v) {
         all(is.na(v))
       }, logical(1)))) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       rng <- range(unlist(mat), na.rm = TRUE)
       if (!all(is.finite(rng))) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
       v_min <- rng[1]
@@ -183,7 +199,6 @@ step_guttman <- function(scale_patterns,
       Ncat <- as.integer(v_max - v_min + 1L)
       if (!is.finite(Ncat) ||
         Ncat < 2L) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
@@ -199,21 +214,37 @@ step_guttman <- function(scale_patterns,
         }
       )
       if (is.null(gfit)) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       g <- as.numeric(gfit[["PFscores"]][["PFscores"]])
       z <- as.numeric(scale(g))
-      fail_flags[[scale_name]] <- ifelse(is.na(z) |
-        abs(z) <= z_thresh, 0L, 1L)
+      row_applicable <- rowSums(!is.na(mat)) == ncol(mat)
+      applied_flags[[scale_name]] <- as.integer(row_applicable)
+      fail_flags[[scale_name]] <- ifelse(
+        !row_applicable,
+        NA_integer_,
+        ifelse(is.na(z) | abs(z) <= z_thresh, 0L, 1L)
+      )
     }
 
     if (ncol(fail_flags) == 0L) {
       return(df)
     }
-    total_fails <- rowSums(fail_flags, na.rm = TRUE)
-    keep_rows <- total_fails < max_fails
+    total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+    total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
+    fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
+    if (!is.numeric(fail_threshold) || length(fail_threshold) != 1L ||
+      is.na(fail_threshold)) {
+      stop("`fail_threshold` must be a single numeric value.")
+    }
+    if (fail_threshold >= 0 && fail_threshold <= 1) {
+      # Ratio mode (includes 1.0 => no filtering by ratio)
+      keep_rows <- total_applied == 0 | fail_ratio <= fail_threshold
+    } else {
+      threshold_count <- as.integer(fail_threshold)
+      keep_rows <- total_applied == 0 | total_fails < threshold_count
+    }
     # message(sprintf(
     #  "Guttman Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
@@ -223,12 +254,13 @@ step_guttman <- function(scale_patterns,
   }
 }
 
-step_mahalanobis <- function(scale_patterns, max_fails = 2) {
+step_mahalanobis <- function(scale_patterns, fail_threshold = 0.5) {
   if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
     stop("`scale_patterns` must be a named list of regex patterns.")
   }
   function(df) {
     fail_flags <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
 
     for (scale_name in names(scale_patterns)) {
       cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
@@ -243,31 +275,228 @@ step_mahalanobis <- function(scale_patterns, max_fails = 2) {
         all(is.na(v))
       }, logical(1))
       if (all(all_na)) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       # drop all-NA columns to avoid singular cov
       block <- block[, !all_na, drop = FALSE]
       if (ncol(block) < 2) {
-        fail_flags[[scale_name]] <- 0L
         next
       }
 
       res <- rstatix::mahalanobis_distance(block)
-      fail_flags[[scale_name]] <- as.integer(res$is.outlier)
+      outlier <- as.integer(res$is.outlier)
+      if (length(outlier) != nrow(block)) {
+        outlier <- rep(NA_integer_, nrow(block))
+      }
+      row_applicable <- rowSums(!is.na(block)) == ncol(block)
+      applied_flags[[scale_name]] <- as.integer(row_applicable)
+      fail_flags[[scale_name]] <- ifelse(
+        !row_applicable,
+        NA_integer_,
+        outlier
+      )
     }
 
     if (ncol(fail_flags) == 0L) {
       return(df)
     }
-    total_fails <- rowSums(fail_flags, na.rm = TRUE)
-    keep_rows <- total_fails < max_fails
+    total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+    total_fails <- rowSums(fail_flags == 1L, na.rm = TRUE)
+    fail_ratio <- ifelse(total_applied > 0, total_fails / total_applied, 0)
+    if (!is.numeric(fail_threshold) || length(fail_threshold) != 1L ||
+      is.na(fail_threshold)) {
+      stop("`fail_threshold` must be a single numeric value.")
+    }
+    if (fail_threshold >= 0 && fail_threshold <= 1) {
+      # Ratio mode (includes 1.0 => no filtering by ratio)
+      keep_rows <- total_applied == 0 | fail_ratio <= fail_threshold
+    } else {
+      threshold_count <- as.integer(fail_threshold)
+      keep_rows <- total_applied == 0 | total_fails < threshold_count
+    }
     # message(sprintf(
     #  "Mahalanobis Filter: Removed %d rows. %d rows remain.",
     #  sum(!keep_rows),
     #  sum(keep_rows)
     # ))
+    df[keep_rows, , drop = FALSE]
+  }
+}
+
+step_atypical_patterns <- function(scale_patterns,
+                                   md_p = 0.001,
+                                   md_ratio_thresh = NULL,
+                                   g_z_thresh = 2,
+                                   min_scales = 2,
+                                   min_flags = NULL,
+                                   use_partial = FALSE,
+                                   scale_flag_logic = "OR") {
+  if (!is.list(scale_patterns) || is.null(names(scale_patterns))) {
+    stop("`scale_patterns` must be a named list of regex patterns.")
+  }
+  if (!is.numeric(min_scales) || length(min_scales) != 1L ||
+    is.na(min_scales) || min_scales <= 0) {
+    stop("`min_scales` must be a positive number (ratio 0 < x < 1, or integer count >= 1).")
+  }
+  if (!is.null(md_ratio_thresh) && (
+    !is.numeric(md_ratio_thresh) || length(md_ratio_thresh) != 1L || is.na(md_ratio_thresh)
+  )) {
+    stop("`md_ratio_thresh` must be a single numeric value or NULL.")
+  }
+  if (!is.null(min_flags) && (
+    !is.numeric(min_flags) || length(min_flags) != 1L ||
+    is.na(min_flags) || min_flags < 1 || min_flags != floor(min_flags)
+  )) {
+    stop("`min_flags` must be a positive integer or NULL.")
+  }
+  if (!is.logical(use_partial) || length(use_partial) != 1L || is.na(use_partial)) {
+    stop("`use_partial` must be TRUE or FALSE.")
+  }
+  scale_flag_logic <- match.arg(toupper(scale_flag_logic), c("OR", "AND"))
+
+  function(df) {
+    if (nrow(df) == 0) {
+      return(df)
+    }
+
+    scale_flags   <- data.frame(row.names = seq_len(nrow(df)))
+    applied_flags <- data.frame(row.names = seq_len(nrow(df)))
+
+    for (scale_name in names(scale_patterns)) {
+      cols <- grep(scale_patterns[[scale_name]], names(df), value = TRUE)
+      if (length(cols) < 2) {
+        next
+      }
+
+      block   <- as.data.frame(lapply(df[cols], to_numeric), check.names = FALSE)
+      n_items <- ncol(block)
+      n_pres  <- rowSums(!is.na(block))
+
+      row_complete <- n_pres == n_items
+      # When use_partial = TRUE, include scales where ≤ 50% of items are missing
+      row_usable   <- if (use_partial) (n_pres / n_items) >= 0.5 else row_complete
+
+      if (sum(row_usable) < 2) {
+        next
+      }
+
+      applied_flags[[scale_name]] <- as.integer(row_usable)
+
+      # ---- Mahalanobis ----
+      md_outlier <- rep(0L, nrow(df))
+
+      # Batch: fully complete rows
+      if (sum(row_complete) >= 2) {
+        md_res <- tryCatch(
+          rstatix::mahalanobis_distance(block[row_complete, , drop = FALSE]),
+          error = function(e) { NULL }
+        )
+        if (!is.null(md_res) && "mahal.dist" %in% names(md_res)) {
+          p_vals  <- pchisq(md_res$mahal.dist, df = n_items, lower.tail = FALSE)
+          md_vals <- as.integer(p_vals < md_p)
+          if (!is.null(md_ratio_thresh)) {
+            md_vals <- as.integer(
+              md_vals == 1L & (md_res$mahal.dist / n_items) > md_ratio_thresh
+            )
+          }
+          if (length(md_vals) == sum(row_complete)) {
+            md_outlier[row_complete] <- md_vals
+          }
+        }
+      }
+
+      # Per-row: partial responders (only when use_partial = TRUE)
+      # Covariance estimated from rows that have all of this participant's items;
+      # df for p-value and M/df ratio is the actual number of answered items.
+      for (i in if (use_partial) which(row_usable & !row_complete) else integer(0)) {
+        avail   <- which(!is.na(block[i, ]))
+        n_avail <- length(avail)
+        sub_blk <- block[, avail, drop = FALSE]
+        ref_rows <- rowSums(!is.na(sub_blk)) == n_avail
+        if (sum(ref_rows) <= n_avail) next   # need more obs than vars
+
+        ref_mat <- as.matrix(sub_blk[ref_rows, , drop = FALSE])
+        cov_mat <- tryCatch(cov(ref_mat), error = function(e) NULL)
+        if (is.null(cov_mat)) next
+
+        d_i <- tryCatch(
+          as.numeric(mahalanobis(
+            matrix(as.numeric(block[i, avail]), nrow = 1),
+            center = colMeans(ref_mat),
+            cov    = cov_mat
+          )),
+          error = function(e) NA_real_
+        )
+        if (is.na(d_i) || !is.finite(d_i)) next
+
+        p_i   <- pchisq(d_i, df = n_avail, lower.tail = FALSE)
+        is_md <- p_i < md_p
+        if (!is.null(md_ratio_thresh)) {
+          is_md <- is_md & (d_i / n_avail) > md_ratio_thresh
+        }
+        md_outlier[i] <- as.integer(is_md)
+      }
+
+      # ---- Guttman (complete rows only — PerFit requires no missing values) ----
+      g_outlier <- rep(0L, nrow(df))
+      if (sum(row_complete) >= 2) {
+        mat <- block[row_complete, , drop = FALSE]
+        rng <- range(unlist(mat), na.rm = TRUE)
+        if (all(is.finite(rng))) {
+          v_min <- rng[1]
+          v_max <- rng[2]
+          Ncat  <- as.integer(v_max - v_min + 1L)
+          if (is.finite(Ncat) && Ncat >= 2L) {
+            mat0 <- as.data.frame(
+              lapply(mat, function(v) as.integer(round(v - v_min))),
+              check.names = FALSE
+            )
+            gfit <- tryCatch(
+              PerFit::Gpoly(as.matrix(mat0), Ncat = Ncat),
+              error = function(e) NULL
+            )
+            if (!is.null(gfit)) {
+              g   <- as.numeric(gfit[["PFscores"]][["PFscores"]])
+              z   <- as.numeric(scale(g))
+              gut_vals <- ifelse(is.na(z) | abs(z) <= g_z_thresh, 0L, 1L)
+              if (length(gut_vals) == sum(row_complete)) {
+                g_outlier[row_complete] <- gut_vals
+              }
+            }
+          }
+        }
+      }
+
+      combined_flag <- if (scale_flag_logic == "AND") {
+        (md_outlier == 1L) & (g_outlier == 1L)
+      } else {
+        (md_outlier == 1L) | (g_outlier == 1L)
+      }
+      scale_flags[[scale_name]] <- ifelse(row_usable & combined_flag, 1L, 0L)
+    }
+
+    if (ncol(scale_flags) == 0L) {
+      return(df)
+    }
+
+    total_flags <- rowSums(scale_flags == 1L, na.rm = TRUE)
+
+    if (min_scales < 1) {
+      # Ratio mode: remove if flagged in > min_scales proportion of filled-in scales
+      total_applied <- rowSums(applied_flags == 1L, na.rm = TRUE)
+      flag_ratio    <- ifelse(total_applied > 0, total_flags / total_applied, 0)
+      remove_rows   <- flag_ratio > min_scales
+      if (!is.null(min_flags)) {
+        # Both conditions must hold: ratio exceeded AND minimum count reached
+        remove_rows <- remove_rows & total_flags >= min_flags
+      }
+      keep_rows <- total_applied == 0 | !remove_rows
+    } else {
+      # Count mode: remove if flagged in >= min_scales scales
+      keep_rows <- total_flags < min_scales
+    }
+
     df[keep_rows, , drop = FALSE]
   }
 }
@@ -406,6 +635,56 @@ step_filter_min_duration <- function(start_col = "startdate",
     dur <- as.numeric(difftime(end, start, units = units))
 
     df[!is.na(dur) & dur >= threshold, , drop = FALSE]
+  }
+}
+
+step_keep_ids <- function(allowed_ids, id_col = "id") {
+  force(allowed_ids)
+  force(id_col)
+
+  function(df) {
+    if (!(id_col %in% names(df))) {
+      message(sprintf("Column '%s' not found; skipping.", id_col))
+      return(df)
+    }
+    ids <- normalize_chr(df[[id_col]])
+    keep <- ids %in% allowed_ids
+    df[keep, , drop = FALSE]
+  }
+}
+
+step_keep_by_composite_id <- function(external_df, id_cols) {
+  force(external_df)
+  force(id_cols)
+
+  build_key <- function(df) {
+    parts <- lapply(id_cols, function(col) {
+      if (!(col %in% names(df))) return(rep(NA_character_, nrow(df)))
+      toupper(normalize_chr(df[[col]]))
+    })
+    has_na <- Reduce("|", lapply(parts, is.na))
+    key <- do.call(paste, c(parts, list(sep = "_")))
+    key[has_na] <- NA_character_
+    key
+  }
+
+  valid_ext_keys <- unique(build_key(external_df))
+  valid_ext_keys <- valid_ext_keys[!is.na(valid_ext_keys)]
+
+  function(df) {
+    int_keys <- build_key(df)
+
+    dup_keys <- unique(int_keys[!is.na(int_keys) & duplicated(int_keys)])
+    if (length(dup_keys) > 0) {
+      message(sprintf(
+        "[US external check] %d duplicate composite key(s) found — manual review needed: %s",
+        length(dup_keys),
+        paste(dup_keys, collapse = ", ")
+      ))
+    }
+
+    keep <- !is.na(int_keys) & int_keys %in% valid_ext_keys
+    df[keep, , drop = FALSE]
   }
 }
 
