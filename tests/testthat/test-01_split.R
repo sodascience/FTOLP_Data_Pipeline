@@ -299,3 +299,31 @@ test_that("fix_mojibake_utf8 leaves plain ASCII text unchanged", {
   env <- load_split_functions()
   expect_equal(env$fix_mojibake_utf8("other"), "other")
 })
+
+test_that("recode_unchecked_occupation_na recodes NA to 0 (not selected) for labelled numeric columns, preserving labels", {
+  # IL_AR_AUTO/NL_AUTO/RU_AUTO_1's Occupation_* checkboxes only record an
+  # explicit 1 when checked; unchecked boxes are raw NA rather than an
+  # explicit 0 - this treats that NA as "not selected", not missing.
+  env <- load_split_functions()
+  df <- tibble::tibble(
+    Occupation_worker = labelled(c(1, NA, 1, NA), labels = c("Não selecionado" = 0, "Sim" = 1))
+  )
+  out <- env$recode_unchecked_occupation_na(df, "Occupation_worker")
+  expect_equal(as.numeric(unclass(out$Occupation_worker)), c(1, 0, 1, 0))
+  expect_equal(val_labels(out$Occupation_worker), c("Não selecionado" = 0, "Sim" = 1))
+})
+
+test_that("recode_unchecked_occupation_na recodes NA to '' for character columns (e.g. Occupation_other free text)", {
+  env <- load_split_functions()
+  df <- tibble::tibble(Occupation_other = c("teacher", NA, ""))
+  out <- env$recode_unchecked_occupation_na(df, "Occupation_other")
+  expect_equal(out$Occupation_other, c("teacher", "", ""))
+})
+
+test_that("recode_unchecked_occupation_na only touches columns that are actually present", {
+  env <- load_split_functions()
+  df <- tibble::tibble(Occupation_worker = c(1, NA))
+  out <- env$recode_unchecked_occupation_na(df, c("Occupation_worker", "Occupation_grantholder"))
+  expect_equal(names(out), "Occupation_worker")
+  expect_equal(out$Occupation_worker, c(1, 0))
+})
