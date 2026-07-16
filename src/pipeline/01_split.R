@@ -196,6 +196,30 @@ fix_mojibake_utf8 <- function(x) {
   }, character(1))
 }
 
+# IL_AR_AUTO, NL_AUTO and RU_AUTO_1's Occupation_* checkbox columns only ever
+# record an explicit 1 (checked); every unchecked box is left as raw NA
+# rather than an explicit 0 (verified: these datasets never have a single
+# labelled/explicit 0 in any Occupation_* column, unlike every other dataset,
+# which has both). So for these three datasets specifically, NA in these
+# columns means "not selected" (0), not genuine non-response - recode it
+# before it reaches the pipeline's normal missing-value coding, which would
+# otherwise mark it "999" (missing) instead.
+recode_unchecked_occupation_na <- function(df, cols) {
+  df %>%
+    mutate(across(
+      all_of(intersect(cols, names(df))),
+      ~ {
+        if (is.character(.x)) {
+          ifelse(is.na(.x), "", .x)
+        } else {
+          raw <- unclass(.x)
+          raw[is.na(raw)] <- 0
+          if (is.labelled(.x)) labelled(raw, labels = val_labels(.x)) else raw
+        }
+      }
+    ))
+}
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Normalize and standardize column names across different survey versions
 # This ensures consistency when merging datasets from different countries/languages
@@ -698,9 +722,24 @@ write_processed(df_brpt, "BRPT_277273.sav")
 df_dataset_brpt <- read_sav(file.path(DIR_EXTERNAL, "DataSet BR&PT.sav")) %>%
   # Standardize FTOS pilot column names: "FTOS_pilot1" -> "FTOS_pilot_1"
   rename_with(~ str_replace(.x, "^FTOS_pilot(\\d+)$", "FTOS_pilot_\\1")) %>%
-  
+
   # Standardize LPS pilot column names: "LPS_pilot1" -> "LPS_pilot_1"
-  rename_with(~ str_replace(.x, "^LPS_pilot(\\d+)$", "LPS_pilot_\\1"))
+  rename_with(~ str_replace(.x, "^LPS_pilot(\\d+)$", "LPS_pilot_\\1")) %>%
+
+  # Occupation_student/grantholder/worker/jobless/retired are recorded as raw
+  # 1/2 in this raw file, but their attached labels are 0="Não selecionado"/
+  # 1="Sim" - an off-by-one export mismatch (verified: no row ever has value
+  # 0). Remap 1->0 ("Não selecionado"), 2->1 ("Sim") so values match labels
+  # and this dataset lines up with every other dataset's 0/1 convention.
+  mutate(across(
+    all_of(c("Occupation_student", "Occupation_grantholder", "Occupation_worker",
+              "Occupation_jobless", "Occupation_retired")),
+    ~ {
+      raw <- unclass(.x)
+      fixed <- ifelse(raw == 1, 0, ifelse(raw == 2, 1, raw))
+      labelled(fixed, labels = c("Não selecionado" = 0, "Sim" = 1))
+    }
+  ))
 
 # LOAD PILOT SURVEY DATA (569687.sav)
 df_brazil_pilot <- read_raw("569687.sav") %>%
@@ -1102,7 +1141,18 @@ process_dataset("216254.sav", "US_216254_", "v1", "US_216254.sav",
 # OUTPUT: NL_AUTO.sav
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 
-process_dataset("Dataset NL.sav", "NL_AUTO_", "v2", "NL_AUTO.sav")
+# NL's education question used different answer options than every other
+# country (Dutch education system categories, 8 levels instead of the
+# standard 10) - kept as its own Education_NL column rather than merged into
+# the main Education column (see config/translations.R).
+process_dataset("Dataset NL.sav", "NL_AUTO_", "v2", "NL_AUTO.sav",
+  # See recode_unchecked_occupation_na() - this dataset's Occupation_*
+  # checkboxes only record when checked, never an explicit "not selected".
+  extra_mutate = \(df) df %>% recode_unchecked_occupation_na(c(
+    "Occupation_student", "Occupation_grantholder", "Occupation_worker",
+    "Occupation_jobless", "Occupation_retired", "Occupation_other"
+  )),
+  pre_normalize_steps = \(df) df %>% rename(Education_NL = Education))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # RUSSIA ----
@@ -1155,9 +1205,17 @@ df_ru_extra <- bind_rows(df_ru_extra_main, df_ru_extra_second) %>%
   
   # Standard normalization (no lastpage filter - not all sources have this field)
   normalize_column_names() %>%
-  
+
   # Mark as autonomous Russian data collection
-  mutate(strategy = "autonomous")
+  mutate(strategy = "autonomous") %>%
+
+  # See recode_unchecked_occupation_na() - this dataset's Occupation_*
+  # checkboxes only record when checked, never an explicit "not selected".
+  # No Occupation_grantholder in this dataset's raw source.
+  recode_unchecked_occupation_na(c(
+    "Occupation_student", "Occupation_worker",
+    "Occupation_jobless", "Occupation_retired", "Occupation_other"
+  ))
 
 write_processed(df_ru_extra, "RU_AUTO_1.sav")
 
@@ -1178,12 +1236,19 @@ df_il_ar_auto <- read_sav(
   user_na = TRUE
 )
 
-# Gender's value labels come out mojibake-corrupted under the windows-1256
-# override above (see fix_mojibake_utf8()) - reverse it before Gender gets
-# converted to text (Gender_v2) later in 03_merge.R.
-gender_labels <- attr(df_il_ar_auto$Gender, "labels")
-names(gender_labels) <- fix_mojibake_utf8(names(gender_labels))
-attr(df_il_ar_auto$Gender, "labels") <- gender_labels
+# Every column's value labels come out mojibake-corrupted under the
+# windows-1256 override above (see fix_mojibake_utf8()) - it's a whole-file
+# issue, not specific to any one question, so reverse it for every labelled
+# column rather than patching individual columns as each one turns out to
+# matter (first found via Gender -> Gender_v2 in 03_merge.R; also affects
+# Education, used directly by this script below).
+for (col in names(df_il_ar_auto)) {
+  labs <- attr(df_il_ar_auto[[col]], "labels")
+  if (!is.null(labs)) {
+    names(labs) <- fix_mojibake_utf8(names(labs))
+    attr(df_il_ar_auto[[col]], "labels") <- labs
+  }
+}
 
 df_il_ar_auto <- df_il_ar_auto %>%
   # Standardize to version 2 scale names
@@ -1202,7 +1267,26 @@ df_il_ar_auto <- df_il_ar_auto %>%
   mutate(id = str_c("IL_AR_AUTO_", id)) %>%
 
   # Mark as printed paper survey (1 = printed, 0 = online)
-  mutate(printed = 1)
+  mutate(printed = 1) %>%
+
+  # This printed-paper survey also has a handful of stray values (2, 3) in
+  # Occupation_grantholder/Occupation_worker with no attached label (only 0
+  # and 1 are labelled) - likely stray marks from manual data entry off a
+  # paper form (3 rows total). Nulled out here first so
+  # recode_unchecked_occupation_na() folds them into "not selected" along
+  # with this dataset's genuinely-unrecorded checkboxes, rather than leaving
+  # them as unlabeled raw 2/3 values in the final Occupation_* columns.
+  mutate(
+    Occupation_grantholder = { v <- unclass(Occupation_grantholder); v[!is.na(v) & !v %in% c(0, 1)] <- NA; labelled(v, labels = val_labels(Occupation_grantholder)) },
+    Occupation_worker = { v <- unclass(Occupation_worker); v[!is.na(v) & !v %in% c(0, 1)] <- NA; labelled(v, labels = val_labels(Occupation_worker)) }
+  ) %>%
+
+  # See recode_unchecked_occupation_na() - this dataset's Occupation_*
+  # checkboxes only record when checked, never an explicit "not selected".
+  recode_unchecked_occupation_na(c(
+    "Occupation_student", "Occupation_grantholder", "Occupation_worker",
+    "Occupation_jobless", "Occupation_retired", "Occupation_other"
+  ))
 
 write_processed(df_il_ar_auto, "IL_AR_AUTO.sav")
 
@@ -1218,9 +1302,29 @@ write_processed(df_il_ar_auto, "IL_AR_AUTO.sav")
 
 # SPECIAL: CAAS -> CAAS_S ("CAAS_1" -> "CAAS_S_1", distinguishes the South
 # African version from standard CAAS). No lastpage filter for this source.
+#
+# This dataset's occupation question used 5 separate numbered checkboxes
+# (occupation_1 = Student, occupation_2 = Full-time employed, occupation_3 =
+# Part-time employed, occupation_4 = Unemployed, occupation_5 = Retired)
+# instead of the named Occupation_student/worker/jobless/retired flags every
+# other dataset uses (and has no grantholder/other options at all). Mapped
+# onto the standard flags so it merges with them: occupation_2 OR
+# occupation_3 -> Occupation_worker (this collapses the full-time/part-time
+# distinction - Occupation_worker elsewhere is a single "are they employed"
+# flag, not full/part-time specific).
 process_dataset("Dataset SA [full].sav", "ZA_AUTO_", "v2", "ZA_AUTO.sav",
   pre_normalize_steps = \(df) df %>%
-    rename_with(~ str_replace(.x, "^CAAS_(\\d+)$", "CAAS_S_\\1")),
+    rename_with(~ str_replace(.x, "^CAAS_(\\d+)$", "CAAS_S_\\1")) %>%
+    mutate(
+      Occupation_student = labelled(unclass(occupation_1), labels = c("Não selecionado" = 0, "Sim" = 1)),
+      Occupation_worker = labelled(
+        as.numeric(unclass(occupation_2) == 1 | unclass(occupation_3) == 1),
+        labels = c("Não selecionado" = 0, "Sim" = 1)
+      ),
+      Occupation_jobless = labelled(unclass(occupation_4), labels = c("Não selecionado" = 0, "Sim" = 1)),
+      Occupation_retired = labelled(unclass(occupation_5), labels = c("Não selecionado" = 0, "Sim" = 1))
+    ) %>%
+    select(-occupation_1, -occupation_2, -occupation_3, -occupation_4, -occupation_5),
   filter_incomplete = FALSE)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1235,6 +1339,11 @@ process_dataset("Dataset SA [full].sav", "ZA_AUTO_", "v2", "ZA_AUTO.sav",
 # No lastpage filter for this source (not all fields available)
 process_dataset("IT Autonomous.sav", "IT_AUTO_", "v2", "IT_AUTO.sav",
   extra_mutate = \(df) df %>% mutate(strategy = "data collection 2"),
+  # This dataset's occupation_* columns are lowercase (unlike every other
+  # dataset's Occupation_*), which isn't touched by normalize_column_names()
+  # (occupation isn't in its capitalization list) - left uncapitalized, they
+  # were silently dropped by 03_merge.R's column selection entirely.
+  pre_normalize_steps = \(df) df %>% rename_with(~ str_replace(.x, "^occupation_", "Occupation_")),
   filter_incomplete = FALSE)
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -1251,7 +1360,12 @@ process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav",
   # this file (only 1/2/666/666666 are labelled) - treat as missing rather
   # than guess its meaning.
   extra_mutate = \(df) df %>%
-    mutate(gender = { g <- gender; g[!is.na(unclass(g)) & unclass(g) == 3] <- NA; g }))
+    mutate(gender = { g <- gender; g[!is.na(unclass(g)) & unclass(g) == 3] <- NA; g }),
+  # This dataset's occupation_* columns are lowercase (unlike every other
+  # dataset's Occupation_*), which isn't touched by normalize_column_names()
+  # (occupation isn't in its capitalization list) - left uncapitalized, they
+  # were silently dropped by 03_merge.R's column selection entirely.
+  pre_normalize_steps = \(df) df %>% rename_with(~ str_replace(.x, "^occupation_", "Occupation_")))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # SLOVAKIA ----
@@ -1268,10 +1382,17 @@ process_dataset("RU autonomous 2.sav", "RU_AUTO_2_", "v2", "RU_AUTO_2.sav",
 # session id was reused for another attempt in most cases, but a few ids have
 # multiple genuinely complete submissions) - keep_most_complete_row() resolves
 # these so the output written to DIR_SPLIT has unique ids.
+# Slovakia's education and occupation questions both used different answer
+# options than every other country (5-level Slovak education-system
+# categories; a single 5-category occupation question instead of the
+# standard binary checkboxes) - kept as their own Education_SK/Occupation_SK
+# columns rather than merged into the main Education/Occupation_* columns
+# (see config/translations.R).
 process_dataset("Slovakia autonomous.sav", "SK_AUTO_", "v2", "SK_AUTO.sav",
   pre_normalize_steps = \(df) df %>%
     rename_with(~ str_replace(.x, "^ciel_(\\d+)_1$", "LPSgoals\\1_content")) %>%
     rename_with(~ str_replace(.x, "^ciel_(\\d+)_2$", "LPSgoals\\1_age")) %>%
+    rename(Education_SK = education, Occupation_SK = occupation) %>%
     keep_most_complete_row(),
   filter_incomplete = FALSE)
 
@@ -1309,8 +1430,12 @@ df_rs_auto <- read_excel(file.path(DIR_RAW, "Serbia Autonomous.xlsx")) %>%
   rename_with(~ str_replace(.x, "^FTOS_(\\d+)$", "FTOS_v2_\\1")) %>%
   rename_with(~ str_replace(.x, "^LPS_(\\d+)$", "LPS_v2_\\1")) %>%
 
-  # Rename education_sv to education and Time stamp to timestamp
-  rename(education = education_sv, timestamp = `Time stamp`) %>%
+  # Rename Time stamp to timestamp. education_sv -> Education_RS (not
+  # "education"/"Education"): it's free text, not the standard closed-ended
+  # 10-option question every other dataset uses (see config/translations.R),
+  # so it's kept as its own column rather than merged into the main
+  # Education column.
+  rename(Education_RS = education_sv, timestamp = `Time stamp`) %>%
 
   # Standard normalization
   normalize_column_names()
