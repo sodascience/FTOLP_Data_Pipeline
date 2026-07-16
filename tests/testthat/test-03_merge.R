@@ -113,3 +113,65 @@ test_that("numerical_cols' scale-item derivation (SCALE_PATTERNS matched against
   expected <- setdiff(all_cols, c("id", "FTOS_x", "LPS_x", "CAAS_x", "SomeUnrelatedColumn"))
   expect_setequal(scale_item_cols, expected)
 })
+
+test_that("extract_lps_goals pulls id + LPSgoal*_content/_age columns, skipping datasets with none", {
+  env <- load_lps_goals_extractor()
+  dfs <- list(
+    A = tibble(
+      id = "A_1", source_dataset = "A", FTOS_v1_1 = 3,
+      LPSgoal1_content = "become a doctor", LPSgoal1_age = 30
+    ),
+    B = tibble(id = "B_1", source_dataset = "B", FTOS_v1_1 = 4) # no LPSgoal columns at all
+  )
+  out <- env$extract_lps_goals(dfs)
+
+  expect_equal(nrow(out), 1) # dataset B contributes no row
+  expect_setequal(names(out), c("id", "source_dataset", "LPSgoal1_content", "LPSgoal1_age"))
+  expect_equal(out$id, "A_1")
+  expect_false("FTOS_v1_1" %in% names(out))
+})
+
+test_that("extract_lps_goals standardizes types across datasets so bind_rows doesn't error (regression: RU_AUTO_1's id/age are numeric)", {
+  env <- load_lps_goals_extractor()
+  dfs <- list(
+    CHAR_DS = tibble(
+      id = "CHAR_1", source_dataset = "CHAR_DS",
+      LPSgoal1_content = "learn to code", LPSgoal1_age = "25"
+    ),
+    NUMERIC_DS = tibble(
+      id = 2, source_dataset = "NUMERIC_DS", # id stored as numeric, like RU_AUTO_1
+      LPSgoal1_content = "travel", LPSgoal1_age = 40 # age already numeric
+    )
+  )
+  out <- env$extract_lps_goals(dfs)
+
+  expect_equal(nrow(out), 2)
+  expect_type(out$id, "character")
+  expect_type(out$LPSgoal1_content, "character")
+  expect_type(out$LPSgoal1_age, "double")
+  expect_setequal(out$id, c("CHAR_1", "2"))
+  expect_setequal(out$LPSgoal1_age, c(25, 40))
+})
+
+test_that("extract_lps_goals unions differing goal-column sets across datasets and pads the rest with NA", {
+  env <- load_lps_goals_extractor()
+  dfs <- list(
+    FEW = tibble(id = "F_1", source_dataset = "FEW", LPSgoal1_content = "a", LPSgoal1_age = 20),
+    MANY = tibble(
+      id = "M_1", source_dataset = "MANY",
+      LPSgoal1_content = "b", LPSgoal1_age = 22,
+      LPSgoal2_content = "c", LPSgoal2_age = 24
+    )
+  )
+  out <- env$extract_lps_goals(dfs)
+
+  expect_setequal(names(out), c("id", "source_dataset", "LPSgoal1_content", "LPSgoal1_age", "LPSgoal2_content", "LPSgoal2_age"))
+  expect_true(is.na(out$LPSgoal2_content[out$id == "F_1"]))
+})
+
+test_that("extract_lps_goals returns an empty (zero-row) tibble, not an error, when no dataset has LPSgoal columns", {
+  env <- load_lps_goals_extractor()
+  dfs <- list(A = tibble(id = "A_1", source_dataset = "A", FTOS_v1_1 = 1))
+  out <- env$extract_lps_goals(dfs)
+  expect_equal(nrow(out), 0)
+})
