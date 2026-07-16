@@ -51,10 +51,58 @@ test_that("CONSTANT_ANSWER_SCALES and ZIGZAG_SCALES intentionally differ in data
   expect_false("BR_PILOT" %in% ipip_zigzag_datasets)
 })
 
-test_that("every col_pattern in both scale tables is a valid, non-empty regex", {
-  all_patterns <- c(CONSTANT_ANSWER_SCALES$col_pattern, ZIGZAG_SCALES$col_pattern)
-  for (p in all_patterns) {
+test_that("every scale_key in both scale tables resolves to a valid, non-empty regex in SCALE_PATTERNS", {
+  all_keys <- c(CONSTANT_ANSWER_SCALES$scale_key, ZIGZAG_SCALES$scale_key)
+  for (key in all_keys) {
+    expect_true(key %in% names(SCALE_PATTERNS), info = paste("missing scale_key:", key))
+    p <- SCALE_PATTERNS[[key]]
     expect_true(nchar(p) > 0)
     expect_no_error(grepl(p, "dummy_column_name"))
   }
+})
+
+test_that("SCALE_PATTERNS has no duplicate names and every pattern is anchored", {
+  expect_false(any(duplicated(names(SCALE_PATTERNS))))
+  for (p in SCALE_PATTERNS) {
+    expect_true(startsWith(p, "^"))
+    expect_true(endsWith(p, "$"))
+  }
+})
+
+test_that("SCALE_PATTERNS$BRS and $FS use the corrected (actually-matching) patterns, not the dead originals", {
+  # Regression test for the two dead patterns found this session:
+  # "^LS_BRS\\d+$" never matched the real post-normalization column name
+  # ("BRS_#"), and "^FS_\\d+$" never matched the real "FS_SES#" columns.
+  expect_true(grepl(SCALE_PATTERNS[["BRS"]], "BRS_1"))
+  expect_false(grepl(SCALE_PATTERNS[["BRS"]], "LS_BRS1"))
+
+  expect_true(grepl(SCALE_PATTERNS[["FS"]], "FS_SES1"))
+  expect_false(grepl(SCALE_PATTERNS[["FS"]], "FS_1"))
+})
+
+test_that("SCALE_PATTERNS$DGI matches both real-world naming variants (Psy_DGI# and IT_AUTO's bare DGI_#)", {
+  expect_true(grepl(SCALE_PATTERNS[["DGI"]], "Psy_DGI1"))
+  expect_true(grepl(SCALE_PATTERNS[["DGI"]], "DGI_1"))
+})
+
+test_that("SCALE_PATTERNS includes CAAS_S and CIPIP (previously not referenced by any filter or the merge)", {
+  expect_true(grepl(SCALE_PATTERNS[["CAAS_S"]], "CAAS_S_1"))
+  expect_false(grepl(SCALE_PATTERNS[["CAAS_S"]], "CAAS_1")) # distinct from plain CAAS
+  expect_true(grepl(SCALE_PATTERNS[["CIPIP"]], "Psy_CIPIP1"))
+})
+
+test_that("scale_patterns_cn_us / scale_patterns_it_brpt_si in 02_clean.R source their patterns from SCALE_PATTERNS (not a second hand-copied set)", {
+  # Reconstructs the assignments as they appear in 02_clean.R and checks they
+  # resolve to the corrected master patterns, so the BRS/FS fix can't drift
+  # out of sync between the two places that used to duplicate it.
+  scale_patterns_cn_us <- list(
+    FTOS = SCALE_PATTERNS[["FTOS_v1"]], LPS = SCALE_PATTERNS[["LPS_v1"]], CAAS = SCALE_PATTERNS[["CAAS"]],
+    DGI = SCALE_PATTERNS[["DGI"]], MLQ = SCALE_PATTERNS[["MLQ"]], AS = SCALE_PATTERNS[["AS"]],
+    BRS = SCALE_PATTERNS[["BRS"]], ESW = SCALE_PATTERNS[["ESW"]], ESS = SCALE_PATTERNS[["ESS"]],
+    FS = SCALE_PATTERNS[["FS"]], GRIT = SCALE_PATTERNS[["GRIT"]]
+  )
+  expect_equal(scale_patterns_cn_us$BRS, SCALE_PATTERNS[["BRS"]])
+  expect_equal(scale_patterns_cn_us$FS, SCALE_PATTERNS[["FS"]])
+  expect_true(grepl(scale_patterns_cn_us$BRS, "BRS_1"))
+  expect_true(grepl(scale_patterns_cn_us$FS, "FS_SES1"))
 })
