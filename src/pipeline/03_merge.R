@@ -708,6 +708,24 @@ label_merge_NAs <- function(df, code_to_assign = 990) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 merged_df <- label_merge_NAs(bind_rows(dfs))
 
+# Derive source_country (e.g. "CN", "BRPT", "IL") from source_dataset (e.g.
+# "CN_277273_clean", "BRPT_277273_clean", "IL_AR_999625_clean") by taking the
+# token before the first underscore - the same convention write_processed()
+# already uses to group split-stage files into DIR_SPLIT/<country>/
+# subdirectories, so this always agrees with which folder a dataset's raw
+# split file lives in. Language-suffixed datasets (IL_AR, IN_HI, IN_EN)
+# collapse to the bare country code (IL, IN), and BR_PILOT collapses to "BR"
+# (its country) rather than "BR_PILOT"; BRPT is not split further, since it
+# is a single fused code for a pooled Brazil+Portugal sample, not a
+# country_language compound - see the "Dataset naming conventions" section
+# of CLAUDE.md.
+derive_source_country <- function(source_dataset) {
+  str_extract(source_dataset, "^[^_]+")
+}
+merged_df$source_country <- derive_source_country(merged_df$source_dataset)
+lps_goals_df$source_country <- derive_source_country(lps_goals_df$source_dataset)
+lps_goals_df <- lps_goals_df %>% relocate(source_country, .after = source_dataset)
+
 # Replace padding NAs in character demographic columns with "990" (missing by design).
 # Numeric padding NAs are already handled inside label_merge_NAs(); character columns
 # need separate treatment because SPSS user-missing codes only apply to numeric variables.
@@ -743,7 +761,7 @@ for (col in country_cols) {
 
 # Rearrange columns: put id, info and demographic first, then scales
 first_cols <- c(
-  "id", "source_dataset",
+  "id", "source_dataset", "source_country",
   "Nationality", "Nationality_original", "Citizen",
   "Origin", "Origin_original",
   "ImmigrationCountry", "ImmigrationCountry_original",
