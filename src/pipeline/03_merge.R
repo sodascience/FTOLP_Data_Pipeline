@@ -331,6 +331,21 @@ extract_lps_goals <- function(dfs, pattern = "^LPSgoal\\d+_(content|age)$") {
 
 lps_goals_df <- extract_lps_goals(dfs)
 
+# Occupation_other is a character free-text field ("please specify") in most
+# datasets, but a plain 0/1 numeric flag in a few (IT_AUTO, RU_AUTO_1/2,
+# ZA_AUTO) - normalize every dataset's version to a 0/1 numeric flag (1 =
+# wrote something) before the general type-standardization step below would
+# otherwise convert character text to NA via as.numeric(), silently losing
+# the "selected other" signal entirely. The free-text content itself isn't
+# retained (out of scope, similar to how Gender_other's own free text isn't
+# translated - see config/translations.R).
+dfs <- lapply(dfs, function(df) {
+  if ("Occupation_other" %in% names(df) && is.character(df$Occupation_other)) {
+    df$Occupation_other <- as.numeric(!is.na(df$Occupation_other) & df$Occupation_other != "")
+  }
+  df
+})
+
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 # Define relevant variables ----
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
@@ -344,7 +359,9 @@ categorical_cols <- c(
   "Sex",
   "Gender_v1",
   "Gender_v2",
-  "Gender_other"                 # Open-ended gender response
+  "Gender_other",                # Open-ended gender response
+  "Education_RS",                # Serbia's education question was free text, not the standard 10-option question
+  "Occupation_SK"                # Slovakia's occupation question was a single 5-category choice, not the standard binary flags
 )
 
 # Define which columns should be treated as numeric (→ numeric)
@@ -365,7 +382,18 @@ numerical_cols <- c(
   "Citizen",                     # 0/1 citizen indicator (1 = citizen, from second-stage datasets)
   "Immigration",                 # Immigration status indicator
   "ImmigrationTime_years",       # Years since immigration
-  "ImmigrationTime_months"       # Months since immigration
+  "ImmigrationTime_months",      # Months since immigration
+  # Education: 1-10 ordinal scale, consistent across every dataset except
+  # NL/RS/SK (see Education_NL/Education_RS/Education_SK below and
+  # config/translations.R). Education_NL/Education_SK are their own
+  # closed-ended ordinal scales (8 and 5 levels) - not comparable to the
+  # 1-10 scale or to each other, so kept as separate columns.
+  "Education", "Education_NL", "Education_SK",
+  # Occupation: 0/1 binary flags, consistent across every dataset except
+  # Serbia (not collected) and Slovakia (Occupation_SK - a single
+  # 5-category choice, categorical, see above).
+  "Occupation_student", "Occupation_grantholder", "Occupation_worker",
+  "Occupation_jobless", "Occupation_retired", "Occupation_other"
 )
 
 # Combine all relevant columns into one vector for processing
@@ -759,6 +787,26 @@ for (col in country_cols) {
   merged_df[[col]] <- translate_categorical(merged_df[[col]], COUNTRY_TRANSLATIONS)
 }
 
+# Education/Education_NL/Education_SK: re-attach a canonical English label
+# set to their already-numeric ordinal codes (relabel_numeric(), see
+# config/translations.R) - unlike Sex/Gender/Nationality above, these don't
+# need value remapping since the codes are already aligned across datasets;
+# pre-merge label normalization stripped their per-dataset (per-language)
+# labels down to just the missing-value codes to avoid bind_rows() warnings.
+education_labels <- list(
+  Education = EDUCATION_LABELS, Education_NL = EDUCATION_NL_LABELS, Education_SK = EDUCATION_SK_LABELS
+)
+for (col in intersect(names(education_labels), names(merged_df))) {
+  merged_df[[col]] <- relabel_numeric(merged_df[[col]], education_labels[[col]])
+}
+
+# Occupation_SK: translate Slovak occupation categories to English, same
+# original-language-preserving pattern as gender_cols/country_cols above.
+if ("Occupation_SK" %in% names(merged_df)) {
+  merged_df[["Occupation_SK_original"]] <- merged_df[["Occupation_SK"]]
+  merged_df[["Occupation_SK"]] <- translate_categorical(merged_df[["Occupation_SK"]], OCCUPATION_SK_TRANSLATIONS)
+}
+
 # Rearrange columns: put id, info and demographic first, then scales
 first_cols <- c(
   "id", "source_dataset", "source_country",
@@ -768,7 +816,11 @@ first_cols <- c(
   "Sex", "Sex_original",
   "Gender_v1", "Gender_v1_original",
   "Gender_v2", "Gender_v2_original",
-  "Gender_other", "Age"
+  "Gender_other", "Age",
+  "Education", "Education_NL", "Education_SK", "Education_RS",
+  "Occupation_student", "Occupation_grantholder", "Occupation_worker",
+  "Occupation_jobless", "Occupation_retired", "Occupation_other",
+  "Occupation_SK", "Occupation_SK_original"
 )
 first_cols <- first_cols[first_cols %in% names(merged_df)]
 scale_cols <- setdiff(names(merged_df), first_cols)
