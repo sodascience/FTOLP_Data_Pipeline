@@ -47,6 +47,7 @@ source(here::here("config", "paths.R"))
 source(here::here("src", "utils", "merge_functions.R"))
 source(here::here("src", "utils", "validation.R"))
 source(here::here("config", "scales.R"))
+source(here::here("config", "translations.R"))
 
 # LOAD ALL CLEANED DATASETS
 # Read all .sav files from clean directory and subfolders and store in named list
@@ -343,8 +344,7 @@ categorical_cols <- c(
   "Sex",
   "Gender_v1",
   "Gender_v2",
-  "Gender_other",                # Open-ended gender response
-  "Gender_final"
+  "Gender_other"                 # Open-ended gender response
 )
 
 # Define which columns should be treated as numeric (→ numeric)
@@ -559,6 +559,36 @@ for (df_name in names(dfs)) {
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 missing_only_labels <- c("by_design" = 990, "technical_error" = 991, "missing" = 999)
 
+# Converts a labelled categorical column to plain character, rendering
+# missing-value codes (990/991/999) as their numeric string ("990"/"991"/
+# "999") rather than as_factor()'s English label text ("by_design"/
+# "technical_error"/"missing") - so categorical columns display missing
+# codes the same way numeric columns do (and the same way char_demo_cols'
+# post-merge padding already does).
+labelled_categorical_to_character <- function(col_data, na_values = all_na_values) {
+  char_vals <- as.character(as_factor(col_data))
+  raw_vals <- unclass(col_data)
+  is_missing_code <- !is.na(raw_vals) & raw_vals %in% na_values
+  char_vals[is_missing_code] <- as.character(raw_vals[is_missing_code])
+  char_vals
+}
+
+# Normalizes one categorical_cols column to character, coding genuine
+# within-dataset non-response as "999". Labelled numeric columns go through
+# labelled_categorical_to_character(); columns that were already character
+# (e.g. Gender_other, an open-ended field that never goes through the
+# labelled-numeric missing-value step above) have a blank response as a
+# literal "" rather than an R NA or a 999 code, so it's replaced explicitly
+# here instead.
+normalize_categorical_column <- function(col_data) {
+  if (is.labelled(col_data)) {
+    return(labelled_categorical_to_character(col_data))
+  }
+  char_vals <- as.character(col_data)
+  char_vals[is.na(char_vals) | char_vals == ""] <- "999"
+  char_vals
+}
+
 dfs <- lapply(dfs, function(df) {
   # 1. Strip scale-point labels from numeric scale columns
   for (col in intersect(numerical_cols, names(df))) {
@@ -572,13 +602,10 @@ dfs <- lapply(dfs, function(df) {
       )
     }
   }
-  # 2. Convert categorical columns to plain character
+  # 2. Convert categorical columns to plain character, coding genuine
+  # within-dataset non-response as "999" (see normalize_categorical_column()).
   for (col in intersect(categorical_cols, names(df))) {
-    col_data <- df[[col]]
-    if (!is.character(col_data)) {
-      df[[col]] <- if (is.labelled(col_data)) as.character(as_factor(col_data))
-                   else                        as.character(col_data)
-    }
+    df[[col]] <- normalize_categorical_column(df[[col]])
   }
   df
 })
@@ -687,16 +714,44 @@ merged_df <- label_merge_NAs(bind_rows(dfs))
 # At this point any remaining NA in these columns must be a padding NA (the column did
 # not exist in that source dataset) because within-dataset NAs were already marked "999"
 # (labeled "missing") before the categorical-to-character conversion above, for every
-# column in categorical_cols - not just Nationality/Origin.
-char_demo_cols <- c("Nationality", "Origin", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final")
+# column in categorical_cols. Derived from categorical_cols (minus id/source_dataset,
+# which are never NA) rather than hand-listed, so a newly added categorical column can't
+# silently miss this padding step the way ImmigrationCountry once did.
+char_demo_cols <- setdiff(categorical_cols, c("id", "source_dataset"))
 for (col in char_demo_cols) {
   if (col %in% names(merged_df)) {
     merged_df[[col]][is.na(merged_df[[col]])] <- "990"
   }
 }
 
+# Translate Sex/Gender_*/Nationality/Origin/ImmigrationCountry to English for
+# cross-dataset consistency (see config/translations.R), keeping the
+# original-language value in a parallel "<column>_original" column.
+# Gender_other is intentionally excluded - it's open-ended free text
+# (self-described gender identity), not a bounded set of labels, so it isn't
+# translated.
+gender_cols <- intersect(c("Sex", "Gender_v1", "Gender_v2"), names(merged_df))
+country_cols <- intersect(c("Nationality", "Origin", "ImmigrationCountry"), names(merged_df))
+for (col in gender_cols) {
+  merged_df[[paste0(col, "_original")]] <- merged_df[[col]]
+  merged_df[[col]] <- translate_categorical(merged_df[[col]], GENDER_TRANSLATIONS)
+}
+for (col in country_cols) {
+  merged_df[[paste0(col, "_original")]] <- merged_df[[col]]
+  merged_df[[col]] <- translate_categorical(merged_df[[col]], COUNTRY_TRANSLATIONS)
+}
+
 # Rearrange columns: put id, info and demographic first, then scales
-first_cols <- c("id", "source_dataset", "Nationality", "Citizen", "Origin", "ImmigrationCountry", "Sex", "Gender_v1", "Gender_v2", "Gender_other", "Gender_final", "Age")
+first_cols <- c(
+  "id", "source_dataset",
+  "Nationality", "Nationality_original", "Citizen",
+  "Origin", "Origin_original",
+  "ImmigrationCountry", "ImmigrationCountry_original",
+  "Sex", "Sex_original",
+  "Gender_v1", "Gender_v1_original",
+  "Gender_v2", "Gender_v2_original",
+  "Gender_other", "Age"
+)
 first_cols <- first_cols[first_cols %in% names(merged_df)]
 scale_cols <- setdiff(names(merged_df), first_cols)
 merged_df <- merged_df %>% select(all_of(first_cols), all_of(scale_cols))
