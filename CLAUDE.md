@@ -48,8 +48,8 @@ DATASETS       # named list of dataset groupings (see below)
 `DATASETS` is a named list of character vectors used to gate which filters apply to which datasets during cleaning, and which datasets are dropped entirely:
 
 ```r
-DATASETS$first_stage        # CN_277273, IT_277273, BR_PT_277273, SI_277273, US_216254, US_868141
-DATASETS$br_pt              # BR_PILOT, BR_PT_277273
+DATASETS$first_stage        # CN_277273, IT_277273, BRPT_277273, SI_277273, US_216254, US_868141
+DATASETS$brpt               # BR_PILOT, BRPT_277273
 DATASETS$us                 # US_216254, US_868141
 DATASETS$cn_us_10_min       # CN_277273, US_868141 — get extra 10-min duration filter
 DATASETS$datasets_to_remove # skipped entirely during 02_clean.R
@@ -60,14 +60,15 @@ DATASETS$datasets_to_remove # skipped entirely during 02_clean.R
 ### LimeSurvey
 Raw LimeSurvey exports are named by survey ID (e.g. `277273.sav`). After `01_split.R`:
 
-- After `01_split.R`, split files are written to `DIR_SPLIT/COUNTRY/COUNTRY[_LANGUAGE]_SURVEYID.sav` (e.g. `DIR_SPLIT/BR/BR_PT_277273.sav`). Note that LANGUAGE is optional and it mainly applies to datasets collected from Brazil, Israel and India. Also, COUNTRY refers to the location of data collection, not the nationality of participants. The 2-letter ISO country codes are used (e.g., `BR`, `CN`, `IT`, `US`),
-- Each row gets a composite string ID: `COUNTRY_[LANGUAGE]_SURVEYID_originalID` (e.g. `BR_PT_277273_1`)
-- `dataset` column stores a short country/group (plus language) code (e.g. `"BR_PT"`)
-- After `02_clean.R`, cleaned files are written to `DIR_CLEAN/COUNTRY/COUNTRY_[LANGUAGE]_SURVEYID_CLEAN.sav` (e.g. `DIR_CLEAN/BR/BR_PT_277273_CLEAN.sav`)
+- After `01_split.R`, split files are written to `DIR_SPLIT/COUNTRY/COUNTRY[_LANGUAGE]_SURVEYID.sav` (e.g. `DIR_SPLIT/IL/IL_AR_999625.sav`). Note that LANGUAGE is optional and it mainly applies to datasets collected from Israel and India. Also, COUNTRY refers to the location of data collection, not the nationality of participants. The 2-letter ISO country codes are used (e.g., `BR`, `CN`, `IT`, `US`),
+- Each row gets a composite string ID: `COUNTRY_[LANGUAGE]_SURVEYID_originalID` (e.g. `IL_AR_999625_1`)
+- `dataset` column stores a short country/group (plus language) code (e.g. `"BRPT"`)
+- After `02_clean.R`, cleaned files are written to `DIR_CLEAN/COUNTRY/COUNTRY_[LANGUAGE]_SURVEYID_CLEAN.sav` (e.g. `DIR_CLEAN/IL/IL_AR_999625_CLEAN.sav`)
 
 Exceptions:
 - Most datasets do not have language codes in their names (e.g., `"US_216254.sav"` and `"IT_277273.sav"`).
 - The pilot Brazilian Portugese dataset is named `"BR_PILOT.sav"` after `01_split.R` and `"BR_PILOT_CLEAN.sav"` after `02_clean.R`. It is the only pilot dataset.
+- `BRPT` (e.g. `"BRPT_277273.sav"`) is a single fused code, not a COUNTRY_LANGUAGE compound: it denotes a pool of participants from Brazil and Portugal that cannot be distinguished from each other in the data, so it is written without an underscore between BR and PT.
 
 ### Other sources
 Other raw datasets have no consistent naming convention (e.g., `"Dataset_15.08.2022, RU (1).sav"` and `"Dataset US [students in the University of Oregon].sav"`). 
@@ -78,7 +79,7 @@ Other raw datasets have no consistent naming convention (e.g., `"Dataset_15.08.2
 ### Countries and languages
 | Country | Language | Code |
 |----------|----------|------|
-| Brazil | Portuguese | `BR_PT` |
+| Brazil & Portugal (mixed pool) | Portuguese | `BRPT` |
 | China | - | `CN` |
 | India | English | `IN_EN` |
 | India | Hindi | `IN_HI` |
@@ -108,7 +109,7 @@ The three stages and their corresponding datasets after `01_split.R` are:
 - BR_PILOT.sav
 
 ### Stage 1
-- BR_PT_277273.sav
+- BRPT_277273.sav
 - CN_277273.sav
 - IT_277273.sav
 - IT_AUTO.sav
@@ -137,7 +138,7 @@ The three stages and their corresponding datasets after `01_split.R` are:
 - TR_999625.sav
 
 ### Remove
-- BR_PT_999625.sav
+- BRPT_999625.sav
 - CN_999625.sav
 - ES_277273.sav
 - IT_999625.sav
