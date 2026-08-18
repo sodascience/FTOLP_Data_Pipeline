@@ -1145,13 +1145,27 @@ process_dataset("216254.sav", "US_216254_", "v1", "US_216254.sav",
 # country (Dutch education system categories, 8 levels instead of the
 # standard 10) - kept as its own Education_NL column rather than merged into
 # the main Education column (see config/translations.R).
+#
+# NL's raw FTOS item numbering is off by one from FTOS_4 onward: the raw
+# columns are FTOS_1, FTOS_2, FTOS_3, FTOS_X (attention check), FTOS_5,
+# FTOS_6, FTOS_7, FTOS_8, FTOS_9 - i.e. there is no raw "FTOS_4", and the
+# item that should be FTOS_4 was numbered FTOS_5, and so on through FTOS_9
+# (which should be FTOS_8). The survey platform's item counter appears to
+# have counted the FTOS_X attention check as an item, bumping every real
+# item after it up by one. Renamed here (before rename_scale_version()
+# applies the "_v2" version suffix) to the correct FTOS_4..FTOS_8.
 process_dataset("Dataset NL.sav", "NL_AUTO_", "v2", "NL_AUTO.sav",
   # See recode_unchecked_occupation_na() - this dataset's Occupation_*
   # checkboxes only record when checked, never an explicit "not selected".
-  extra_mutate = \(df) df %>% recode_unchecked_occupation_na(c(
-    "Occupation_student", "Occupation_grantholder", "Occupation_worker",
-    "Occupation_jobless", "Occupation_retired", "Occupation_other"
-  )),
+  extra_mutate = \(df) df %>%
+    rename(
+      FTOS_4 = FTOS_5, FTOS_5 = FTOS_6, FTOS_6 = FTOS_7,
+      FTOS_7 = FTOS_8, FTOS_8 = FTOS_9
+    ) %>%
+    recode_unchecked_occupation_na(c(
+      "Occupation_student", "Occupation_grantholder", "Occupation_worker",
+      "Occupation_jobless", "Occupation_retired", "Occupation_other"
+    )),
   pre_normalize_steps = \(df) df %>% rename(Education_NL = Education))
 
 # ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
