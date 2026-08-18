@@ -299,4 +299,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Contact
 Do you have questions, suggestions, or remarks? Feel free to make an issue or contact [Qixiang Fang](https://github.com/fqixiang).
 
-<img src="docs/logos/soda.png" alt="SoDa logo" width="250px"/> 
+<img src="logo/soda.png" alt="SoDa logo" width="250px"/> 
