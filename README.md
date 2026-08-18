@@ -292,8 +292,8 @@ DATASETS <- list(
 - `HS`: Hope Scale
 
 ## 📄 License
-
 MIT License - see [LICENSE](LICENSE) file for details.
+
 ---
 
 ## Contact
